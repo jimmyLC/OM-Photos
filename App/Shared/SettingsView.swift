@@ -3,7 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(ConnectionManager.self) private var connection
-    @AppStorage(SettingKey.autoDisconnect) private var autoDisconnect = true
+    @AppStorage(SettingKey.autoDisconnect) private var autoDisconnect = false
     @AppStorage(SettingKey.powerOffWhenDone) private var powerOffWhenDone = true
     @State private var confirmForget: PairedCamera?
     @State private var error: String?

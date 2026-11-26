@@ -226,3 +226,17 @@ struct ConnectionTests {
         #expect(r.url?.absoluteString == "http://192.168.0.10/get_imglist.cgi?DIR=/DCIM/100OMSYS")
     }
 }
+
+extension ConnectionTests {
+    @Test func connectsWithoutPairingWhenAlreadyOnCameraWiFi() async {
+        FakeCamera.reset(reachable: true)
+        let m = ConnectionManager(store: MemoryCameraStore(), joiner: FakeJoiner(),
+                                  client: CameraClient(session: FakeCamera.session()))
+        await m.connectIfReachable()
+        #expect(m.isConnected)
+        #expect(m.current == nil)
+        #expect(m.displayName == "OM-3")
+        await m.disconnect()
+        #expect(m.state == .idle)
+    }
+}

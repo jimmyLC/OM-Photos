@@ -12,7 +12,7 @@ struct SidebarView: View {
         List(selection: $selection) {
             Section("來源") {
                 HStack {
-                    Label(connection.current?.name ?? connection.cameras.first?.name ?? "相機", systemImage: "wifi")
+                    Label(connection.displayName, systemImage: "wifi")
                     Spacer()
                     Circle()
                         .fill(connection.isConnected ? Color.green : Color.secondary.opacity(0.4))
@@ -100,7 +100,7 @@ struct CompactFilterMenu: View {
                 Button {
                     Task { await model.select(.wifi) }
                 } label: {
-                    Label(connection.current?.name ?? "相機（Wi-Fi）", systemImage: model.selectedSource == .wifi ? "checkmark" : "wifi")
+                    Label(connection.displayName, systemImage: model.selectedSource == .wifi ? "checkmark" : "wifi")
                 }
                 ForEach(model.volumes, id: \.self) { url in
                     Button {

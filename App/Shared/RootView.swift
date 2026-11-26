@@ -23,7 +23,7 @@ struct RootView: View {
     var body: some View {
         @Bindable var model = model
         Group {
-            if connection.cameras.isEmpty && model.volumes.isEmpty {
+            if connection.cameras.isEmpty && model.volumes.isEmpty && !connection.isConnected {
                 NavigationStack {
                     WelcomeView(pair: { showPairing = true })
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -114,9 +114,11 @@ struct RootView: View {
         .onChange(of: model.library.phase) { _, phase in
             if phase == .loaded { model.autoImportIfWanted() }
         }
-        .onAppear {
-            // First launch: go straight to the scanner.
-            if connection.cameras.isEmpty && model.volumes.isEmpty { showPairing = true }
+        .task {
+            // First launch: go straight to the scanner, unless already on the camera Wi-Fi.
+            guard connection.cameras.isEmpty, model.volumes.isEmpty else { return }
+            await connection.connectIfReachable()
+            if !connection.isConnected, model.volumes.isEmpty { showPairing = true }
         }
         .task {
             if model.usingUSB {

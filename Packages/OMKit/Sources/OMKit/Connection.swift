@@ -217,10 +217,12 @@ public final class ConnectionManager {
     /// Connect silently when the device is already on the camera Wi-Fi
     /// (e.g. the user just switched in Settings and came back). Never switches networks.
     public func connectIfReachable() async {
-        guard !cameras.isEmpty, !isConnected, !state.isBusy else { return }
+        guard !isConnected, !state.isBusy else { return }
         guard let info = await probe(timeout: 1.5), !isConnected, !state.isBusy else { return }
         attempt += 1
-        current = current ?? cameras.first
+        // Unpaired is fine: the user already joined the camera Wi-Fi (pairing only
+        // matters for switching networks automatically later).
+        current = current ?? (cameras.count == 1 ? cameras.first : nil)
         joinedByApp = false
         joinedByUser = joiner.isManual
         notice = nil
@@ -228,6 +230,13 @@ public final class ConnectionManager {
     }
 
     public var switchesWiFiAutomatically: Bool { !joiner.isManual }
+
+    /// Camera name to show: the paired name, else the model the camera reports.
+    public var displayName: String {
+        if let name = current?.name { return name }
+        if case .connected(let info) = state { return info.model }
+        return cameras.first?.name ?? "相機"
+    }
 
     /// Stop waiting for the camera (manual join or a slow automatic join).
     public func cancel() async {

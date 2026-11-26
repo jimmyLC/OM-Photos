@@ -8,7 +8,7 @@ struct DetailView: View {
 
     var body: some View {
         Group {
-            if model.selectedSource == .wifi && connection.cameras.isEmpty {
+            if model.selectedSource == .wifi && connection.cameras.isEmpty && !connection.isConnected {
                 // Wi-Fi chosen but no camera paired yet (e.g. used only over USB so far).
                 WelcomeView(pair: { model.requestPairing = true })
             } else if model.selectedSource == .wifi && !connection.isConnected {

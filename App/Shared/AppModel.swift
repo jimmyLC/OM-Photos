@@ -165,15 +165,15 @@ final class AppModel {
 
     /// After an import over Wi-Fi: switch back to the normal network if the user wants that.
     func afterImport(_ summary: ImportSummary) async {
-        let wanted = UserDefaults.standard.object(forKey: SettingKey.autoDisconnect) as? Bool ?? true
-        guard wanted, selectedSource == .wifi, connection.isConnected, summary.imported > 0,
+        let wanted = UserDefaults.standard.bool(forKey: SettingKey.autoDisconnect)  // default off
+        guard wanted, connection.joinedByApp, selectedSource == .wifi, connection.isConnected, summary.imported > 0,
               summary.failed.isEmpty, !summary.cancelled, summary.error == nil else { return }
         await connection.disconnect()
     }
 
     var sourceTitle: String {
         switch selectedSource {
-        case .wifi: connection.current?.name ?? connection.cameras.first?.name ?? "相機"
+        case .wifi: connection.displayName
         case .volume(let url): VolumeSource(root: url).displayName
         }
     }
@@ -182,8 +182,9 @@ final class AppModel {
     func syncSource() async {
         switch selectedSource {
         case .wifi:
-            if connection.isConnected, let camera = connection.current {
-                await library.setSource(WiFiSource(client: connection.client, cameraID: camera.id))
+            if connection.isConnected, case .connected(let info) = connection.state {
+                let id = connection.current?.id ?? info.model
+                await library.setSource(WiFiSource(client: connection.client, cameraID: id))
             } else {
                 await library.setSource(nil)
             }
