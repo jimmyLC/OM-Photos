@@ -1,0 +1,74 @@
+name: OMTransfer
+options:
+  developmentLanguage: zh-Hant
+  deploymentTarget:
+    macOS: '27.0'
+    iOS: '27.0'
+packages:
+  OMKit:
+    path: Packages/OMKit
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    DEVELOPMENT_TEAM: 429PZ9Y4P4
+    CODE_SIGN_STYLE: Automatic
+    PRODUCT_BUNDLE_IDENTIFIER: com.jimmylc.OMTransfer
+    PRODUCT_NAME: OM Transfer
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: OM Transfer
+    INFOPLIST_KEY_NSCameraUsageDescription: 用鏡頭掃描相機螢幕上的 QR code，完成配對。
+    INFOPLIST_KEY_NSHumanReadableCopyright: 'Copyright © 2026 JimmyLC'
+
+targets:
+  OMTransfer-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - App/Shared
+      - App/macOS
+    dependencies:
+      - package: OMKit
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: App/macOS/OMTransfer.entitlements
+        ENABLE_APP_SANDBOX: NO
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.photography
+        INFOPLIST_KEY_NSLocationUsageDescription: macOS 需要定位權限才能讀取 Wi-Fi 名稱，用來切換到相機 Wi-Fi 並切回原本的網路。不會記錄你的位置。
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: macOS 需要定位權限才能讀取 Wi-Fi 名稱，用來切換到相機 Wi-Fi 並切回原本的網路。不會記錄你的位置。
+    entitlements:
+      path: App/macOS/OMTransfer.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jimmylc.OMTransfer
+
+  OMTransfer-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - App/Shared
+      - App/iOS
+    dependencies:
+      - package: OMKit
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: '1,2'
+        CODE_SIGN_ENTITLEMENTS: App/iOS/OMTransfer.entitlements
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: 連到相機的 Wi-Fi，讀取並傳輸照片。
+    info:
+      path: App/iOS/Info.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    # Automatic Wi-Fi joining on iPhone/iPad needs a paid developer account:
+    # add `com.apple.developer.networking.HotspotConfiguration: true` below and
+    # SWIFT_ACTIVE_COMPILATION_CONDITIONS: HOTSPOT to the settings.
+    entitlements:
+      path: App/iOS/OMTransfer.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jimmylc.OMTransfer

@@ -1,0 +1,292 @@
+import OMKit
+import SwiftUI
+
+struct RootView: View {
+    @Environment(ConnectionManager.self) private var connection
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showPairing = false
+    @State private var showSettings = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if connection.cameras.isEmpty {
+                    WelcomeView(pair: { showPairing = true })
+                } else {
+                    ConnectionPanel()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("OM Transfer")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                if !connection.cameras.isEmpty {
+                    ToolbarItem(placement: .principal) { StatusPill() }
+                    ToolbarItem(placement: .primaryAction) {
+                        Menu {
+                            Button("配對新相機", systemImage: "qrcode.viewfinder") { showPairing = true }
+                            #if os(iOS)
+                            Button("設定", systemImage: "gearshape") { showSettings = true }
+                            #else
+                            SettingsLink { Label("設定…", systemImage: "gearshape") }
+                            #endif
+                        } label: {
+                            Label("更多", systemImage: "ellipsis")
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showPairing) {
+            PairingView { camera in
+                showPairing = false
+                Task { await connection.connect(camera) }
+            }
+            .environment(connection)
+        }
+        #if os(iOS)
+        .sheet(isPresented: $showSettings) {
+            NavigationStack {
+                SettingsView()
+                    .toolbar { Button("完成") { showSettings = false } }
+            }
+            .environment(connection)
+        }
+        #endif
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await connection.refresh() } }
+        }
+    }
+}
+
+enum Clipboard {
+    static func copy(_ text: String) {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
+        #endif
+    }
+}
+
+// MARK: - First launch
+
+struct WelcomeView: View {
+    let pair: () -> Void
+
+    var body: some View {
+        VStack(spacing: 28) {
+            Image(systemName: "camera.aperture")
+                .font(.system(size: 72, weight: .light))
+                .foregroundStyle(.tint)
+            VStack(spacing: 8) {
+                Text("把 OM 相機的照片快速帶過來")
+                    .font(.title2.weight(.semibold))
+                Text("先配對一次，之後一鍵連線。")
+                    .foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                Step(number: 1, text: "相機：選單 › 裝置連線，螢幕會出現 QR code。")
+                Step(number: 2, text: "用 OM Transfer 掃描 QR code。")
+                #if os(iOS) && !HOTSPOT
+                Step(number: 3, text: "之後按「連線」，依提示到設定切換到相機 Wi-Fi，密碼可一鍵複製。")
+                #else
+                Step(number: 3, text: "之後只要按「連線」，結束時自動切回原本的 Wi-Fi。")
+                #endif
+            }
+            .frame(maxWidth: 420, alignment: .leading)
+            Button(action: pair) {
+                Label("配對相機", systemImage: "qrcode.viewfinder")
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
+        }
+        .padding(32)
+    }
+
+    struct Step: View {
+        let number: Int
+        let text: String
+        var body: some View {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("\(number)")
+                    .font(.callout.weight(.semibold).monospacedDigit())
+                    .frame(width: 26, height: 26)
+                    .background(.tint.opacity(0.15), in: Circle())
+                Text(text)
+            }
+        }
+    }
+}
+
+// MARK: - Connection
+
+struct ConnectionPanel: View {
+    @Environment(ConnectionManager.self) private var connection
+    @State private var copied = false
+
+    var body: some View {
+        VStack(spacing: 22) {
+            icon
+            VStack(spacing: 6) {
+                Text(title).font(.title2.weight(.semibold))
+                if let subtitle {
+                    Text(subtitle)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: 460)
+            actions
+            if let notice = connection.notice {
+                Label(notice, systemImage: "wifi")
+                    .font(.callout)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .glassEffect(in: Capsule())
+                    .onTapGesture { connection.dismissNotice() }
+            }
+            if let error = connection.storeError {
+                Text(error).font(.footnote).foregroundStyle(.red)
+            }
+        }
+        .padding(32)
+        .animation(.smooth, value: connection.state)
+    }
+
+    private var cameraName: String { connection.current?.name ?? connection.cameras.first?.name ?? "相機" }
+
+    @ViewBuilder private var icon: some View {
+        let symbol = switch connection.state {
+        case .connected: "camera.fill"
+        case .failed: "exclamationmark.triangle"
+        default: "camera"
+        }
+        Image(systemName: symbol)
+            .font(.system(size: 56, weight: .light))
+            .foregroundStyle(connection.isConnected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .symbolEffect(.pulse, isActive: connection.state.isBusy)
+            .contentTransition(.symbolEffect(.replace))
+    }
+
+    private var title: String {
+        switch connection.state {
+        case .idle: cameraName
+        case .connecting: "正在尋找\(cameraName)…"
+        case .joiningWiFi: "正在加入相機 Wi-Fi…"
+        case .waitingForUser: "請切換到相機 Wi-Fi"
+        case .connected(let info): "已連線：\(info.model)"
+        case .leaving: "正在切回原本的 Wi-Fi…"
+        case .failed: "沒有連上"
+        }
+    }
+
+    private var subtitle: String? {
+        switch connection.state {
+        case .idle: "相機：選單 › 裝置連線，再按「連線」。"
+        case .joiningWiFi(let ssid): ssid
+        case .waitingForUser(let c): "到 設定 › Wi-Fi 選擇「\(c.ssid)」，密碼已可複製。切好後回到 OM Transfer，會自動連上。"
+        case .connected(let info): freeSpaceText(info).map { "記憶卡剩餘 \($0)" }
+        case .failed(let why): why
+        default: nil
+        }
+    }
+
+    @ViewBuilder private var actions: some View {
+        switch connection.state {
+        case .connected:
+            Button("中斷連線", role: .cancel) { Task { await connection.disconnect() } }
+                .buttonStyle(.glass)
+                .controlSize(.large)
+        case .waitingForUser(let c):
+            VStack(spacing: 14) {
+                ProgressView()
+                HStack(spacing: 12) {
+                    Button("取消") { Task { await connection.cancel() } }
+                        .buttonStyle(.glass)
+                    Button {
+                        Clipboard.copy(c.password)
+                        copied = true
+                    } label: {
+                        Label(copied ? "已複製密碼" : "複製 Wi-Fi 密碼", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    }
+                    .buttonStyle(.glassProminent)
+                }
+            }
+        case .connecting, .joiningWiFi:
+            VStack(spacing: 14) {
+                ProgressView()
+                Button("取消") { Task { await connection.cancel() } }
+                    .buttonStyle(.glass)
+            }
+        case .leaving:
+            ProgressView()
+        case .idle, .failed:
+            HStack(spacing: 12) {
+                if connection.cameras.count > 1 {
+                    Menu("選擇相機") {
+                        ForEach(connection.cameras) { camera in
+                            Button(camera.name) { Task { await connection.connect(camera) } }
+                        }
+                    }
+                    .buttonStyle(.glass)
+                }
+                Button {
+                    Task { await connection.connect() }
+                } label: {
+                    Label("連線", systemImage: "wifi").padding(.horizontal, 10)
+                }
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    private func freeSpaceText(_ info: CameraInfo) -> String? {
+        guard let bytes = info.freeSpace else { return nil }
+        let text = bytes.formatted(.byteCount(style: .file))
+        return info.freeSpaceIsCapped ? "超過 \(text)" : text
+    }
+}
+
+struct StatusPill: View {
+    @Environment(ConnectionManager.self) private var connection
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(text).font(.callout.weight(.medium))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .glassEffect(in: Capsule())
+        .accessibilityElement(children: .combine)
+    }
+
+    private var color: Color {
+        switch connection.state {
+        case .connected: .green
+        case .failed: .red
+        case .idle: .secondary
+        default: .orange
+        }
+    }
+
+    private var text: String {
+        switch connection.state {
+        case .connected(let info): info.model
+        case .connecting, .joiningWiFi, .waitingForUser: "連線中"
+        case .leaving: "切回網路中"
+        case .failed: "未連線"
+        case .idle: "未連線"
+        }
+    }
+}
