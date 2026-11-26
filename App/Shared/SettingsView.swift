@@ -26,7 +26,7 @@ struct SettingsView: View {
             } header: {
                 Text("已配對的相機")
             } footer: {
-                Text("相機的 Wi-Fi 密碼存在鑰匙圈，並透過 iCloud 鑰匙圈同步到你的其他裝置。")
+                Text(KeychainCameraStore.syncsWithICloud ? "相機的 Wi-Fi 密碼存在鑰匙圈，並透過 iCloud 鑰匙圈同步到你的其他裝置。" : "相機的 Wi-Fi 密碼存在這台裝置的鑰匙圈。")
             }
 
             ImportSettingsSection()

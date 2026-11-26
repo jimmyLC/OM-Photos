@@ -5,3 +5,4 @@ build/
 DerivedData/
 xcuserdata/
 .swiftpm/
+dist/

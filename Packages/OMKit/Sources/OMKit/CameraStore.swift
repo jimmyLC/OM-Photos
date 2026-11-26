@@ -38,6 +38,10 @@ public struct KeychainError: Error, LocalizedError, Equatable {
 /// Stores paired cameras in the keychain, synced through iCloud Keychain so a
 /// camera paired on the iPhone also works on the Mac and iPad.
 /// One generic-password item per camera; the item data is the JSON of `PairedCamera`.
+///
+/// iCloud sync needs a signed build with the keychain-access-groups entitlement.
+/// The free public Mac build is ad-hoc signed and has none, so it falls back to the
+/// login keychain on this Mac only (`errSecMissingEntitlement`).
 public struct KeychainCameraStore: CameraStoring {
     public static let defaultService = "com.jimmylc.OMDrop.camera"
     let service: String
@@ -46,26 +50,60 @@ public struct KeychainCameraStore: CameraStoring {
         self.service = service
     }
 
+    /// True when this build can use the synced keychain (checked once).
+    public static let syncsWithICloud: Bool = {
+        // Reads succeed even without the entitlement, so probe with a write.
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: defaultService + ".probe",
+            kSecAttrAccount as String: "probe",
+            kSecUseDataProtectionKeychain as String: true,
+            kSecValueData as String: Data([1]),
+        ]
+        let status = SecItemAdd(q as CFDictionary, nil)
+        if status == errSecSuccess || status == errSecDuplicateItem {
+            SecItemDelete(q.filter { $0.key != kSecValueData as String } as CFDictionary)
+        }
+        return status != errSecMissingEntitlement
+    }()
+
+    private var synced: Bool { Self.syncsWithICloud }
+
     private func base() -> [String: Any] {
-        [
+        var q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecUseDataProtectionKeychain as String: true,
         ]
+        if synced { q[kSecUseDataProtectionKeychain as String] = true }
+        return q
     }
 
     public func all() throws -> [PairedCamera] {
+        // The login keychain cannot return data for several items at once
+        // (errSecParam), so list the accounts first and read each one.
         var q = base()
-        q[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
+        if synced { q[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny }
         q[kSecMatchLimit as String] = kSecMatchLimitAll
-        q[kSecReturnData as String] = true
+        q[kSecReturnAttributes as String] = true
         var out: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &out)
         if status == errSecItemNotFound { return [] }
         guard status == errSecSuccess else { throw KeychainError(status: status) }
-        let items = out as? [Data] ?? []
-        return items.compactMap { try? JSONDecoder().decode(PairedCamera.self, from: $0) }
-            .sorted { $0.pairedAt < $1.pairedAt }
+        let accounts = (out as? [[String: Any]] ?? []).compactMap { $0[kSecAttrAccount as String] as? String }
+        return try accounts.compactMap(read).sorted { $0.pairedAt < $1.pairedAt }
+    }
+
+    private func read(_ account: String) throws -> PairedCamera? {
+        var q = base()
+        if synced { q[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny }
+        q[kSecAttrAccount as String] = account
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        q[kSecReturnData as String] = true
+        var out: CFTypeRef?
+        let status = SecItemCopyMatching(q as CFDictionary, &out)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = out as? Data else { throw KeychainError(status: status) }
+        return try? JSONDecoder().decode(PairedCamera.self, from: data)
     }
 
     public func save(_ camera: PairedCamera) throws {
@@ -73,8 +111,10 @@ public struct KeychainCameraStore: CameraStoring {
         var q = base()
         q[kSecAttrAccount as String] = camera.credentials.ssid
         q[kSecAttrLabel as String] = "OM Photos：\(camera.name)"
-        q[kSecAttrSynchronizable as String] = true
-        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        if synced {
+            q[kSecAttrSynchronizable as String] = true
+            q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        }
         q[kSecValueData as String] = try JSONEncoder().encode(camera)
         let status = SecItemAdd(q as CFDictionary, nil)
         guard status == errSecSuccess else { throw KeychainError(status: status) }
@@ -83,7 +123,7 @@ public struct KeychainCameraStore: CameraStoring {
     public func delete(ssid: String) throws {
         var q = base()
         q[kSecAttrAccount as String] = ssid
-        q[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
+        if synced { q[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny }
         let status = SecItemDelete(q as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw KeychainError(status: status) }
     }
