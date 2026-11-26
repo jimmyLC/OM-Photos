@@ -30,6 +30,8 @@ final class AppModel {
     var viewing: MediaItem.ID?
     /// iPhone/iPad: taps select instead of opening the viewer.
     var selecting = false
+    /// Ask the root view to show the pairing sheet.
+    var requestPairing = false
     /// iPhone/iPad: show the Files picker to choose the USB card.
     var pickingVolume = false
 
@@ -188,6 +190,18 @@ final class AppModel {
         case .volume(let url):
             await library.setSource(VolumeSource(root: url))
         }
+    }
+
+    /// Launch: a card already plugged in wins over Wi-Fi (no pairing or connect screen).
+    func startWithCards(_ urls: [URL]) {
+        volumes = urls
+        if let first = urls.first { selectedSource = .volume(first) }
+    }
+
+    /// True when a USB card is the source, so Wi-Fi pairing and connecting are not needed.
+    var usingUSB: Bool {
+        if case .volume = selectedSource { return true }
+        return false
     }
 
     func select(_ source: SourceID) async {

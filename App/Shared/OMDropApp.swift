@@ -17,6 +17,7 @@ struct OMDropApp: App {
         let model = AppModel(connection: ConnectionManager(store: KeychainCameraStore(), joiner: joiner))
         _model = State(initialValue: model)
         #if os(macOS)
+        model.startWithCards(VolumeWatcher.currentCards())
         MacAppDelegate.model = model
         #endif
     }

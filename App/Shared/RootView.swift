@@ -118,7 +118,20 @@ struct RootView: View {
             // First launch: go straight to the scanner.
             if connection.cameras.isEmpty && model.volumes.isEmpty { showPairing = true }
         }
-        .task { await connection.connectIfReachable() }
+        .task {
+            if model.usingUSB {
+                await model.syncSource()
+            } else {
+                await connection.connectIfReachable()
+            }
+        }
+        .onChange(of: model.requestPairing) { _, wanted in
+            if wanted { showPairing = true; model.requestPairing = false }
+        }
+        .onChange(of: model.volumes) { _, volumes in
+            // A card was plugged in while the pairing sheet was up: USB does not need pairing.
+            if !volumes.isEmpty, connection.cameras.isEmpty { showPairing = false }
+        }
         .onChange(of: connection.isConnected) { _, _ in
             Task { await model.syncSource() }
         }
@@ -127,7 +140,7 @@ struct RootView: View {
             Task {
                 if connection.isConnected {
                     await connection.refresh()
-                } else {
+                } else if !model.usingUSB {
                     // Back from Settings after joining the camera Wi-Fi: connect by itself.
                     await connection.connectIfReachable()
                 }

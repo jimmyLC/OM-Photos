@@ -19,12 +19,17 @@ final class VolumeWatcher {
     }
 
     func scan() {
+        onChange(Self.currentCards())
+    }
+
+    /// Camera cards mounted right now.
+    nonisolated static func currentCards() -> [URL] {
         let keys: [URLResourceKey] = [.volumeIsRemovableKey, .volumeIsEjectableKey]
         let urls = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
-        onChange(urls.filter { url in
+        return urls.filter { url in
             let v = try? url.resourceValues(forKeys: Set(keys))
             let external = v?.volumeIsRemovable == true || v?.volumeIsEjectable == true || url.path.hasPrefix("/Volumes/")
             return external && VolumeSource.looksLikeCard(url)
-        })
+        }
     }
 }
