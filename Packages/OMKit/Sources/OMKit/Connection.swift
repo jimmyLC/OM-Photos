@@ -157,7 +157,7 @@ public final class ConnectionManager {
                 joinedByUser = true
                 state = .connected(info)
             } else if mine == attempt {
-                state = .failed("等不到相機。請到 設定 › Wi-Fi 選擇「\(camera.credentials.ssid)」，再回到 OM Drop。")
+                state = .failed("等不到相機。請到 設定 › Wi-Fi 選擇「\(camera.credentials.ssid)」，再回到 OM Photos。")
             }
             return
         } catch {

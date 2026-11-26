@@ -23,6 +23,10 @@ public final class USBCameraMonitor: NSObject {
     /// Begin watching. Safe to call more than once. On iPhone and iPad the first call
     /// asks for permission to read and control an attached camera.
     public func start() {
+        #if targetEnvironment(simulator)
+        // The simulator has no cameras, and its framework lacks the permission calls.
+        return
+        #else
         guard browser == nil else { return }
         let browser = ICDeviceBrowser()
         browser.delegate = self
@@ -32,21 +36,29 @@ public final class USBCameraMonitor: NSObject {
             ICDeviceTypeMask.camera.rawValue | ICDeviceLocationTypeMask.local.rawValue)!
         browser.start()
         #else
-        browser.requestContentsAuthorization { status in
-            Task { @MainActor [weak self] in
-                guard let self, let browser = self.browser else { return }
-                guard status == .authorized else {
-                    self.problem = "沒有讀取外接相機的權限。請到 設定 › OM Drop 允許。"
-                    return
-                }
-                // Control permission is needed for deleting.
-                browser.requestControlAuthorization { _ in
-                    Task { @MainActor in browser.start() }
-                }
-            }
+        // The answers arrive on a background queue: the closures must not be main-actor
+        // isolated (that would trap), so they are @Sendable and hop over themselves.
+        browser.requestContentsAuthorization { @Sendable [weak self] status in
+            let granted = status == .authorized
+            Task { @MainActor in self?.contentsAuthorization(granted: granted) }
         }
         #endif
+        #endif
     }
+
+    #if os(iOS)
+    private func contentsAuthorization(granted: Bool) {
+        guard let browser else { return }
+        guard granted else {
+            problem = "沒有讀取外接相機的權限。請到 設定 › OM Photos 允許。"
+            return
+        }
+        // Control permission is needed for deleting.
+        browser.requestControlAuthorization { @Sendable [weak self] _ in
+            Task { @MainActor in self?.browser?.start() }
+        }
+    }
+    #endif
 
     /// Cameras on a cable. On the Mac a card in Storage mode is handled as a disk
     /// instead, so only real PTP/MTP cameras count there.
@@ -182,7 +194,7 @@ final class USBCameraSession: NSObject {
     func delete(_ media: MediaFile) async throws {
         let target = try file(media)
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-            _ = camera.requestDeleteFiles([target], deleteFailed: { _ in }, completion: { result, error in
+            _ = camera.requestDeleteFiles([target], deleteFailed: { @Sendable _ in }, completion: { @Sendable result, error in
                 if let error {
                     c.resume(throwing: error)
                 } else if result[.failed]?.isEmpty == false {

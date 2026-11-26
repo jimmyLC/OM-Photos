@@ -29,11 +29,13 @@ public final class ImportLedger: @unchecked Sendable {
 
     public static func defaultURL() -> URL? {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-        let dir = base.appendingPathComponent("OM Drop", isDirectory: true)
-        // The app was called "OM Transfer" during development: keep its import history.
-        let old = base.appendingPathComponent("OM Transfer", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: dir.path), FileManager.default.fileExists(atPath: old.path) {
-            try? FileManager.default.moveItem(at: old, to: dir)
+        let dir = base.appendingPathComponent("OM Photos", isDirectory: true)
+        // Keep the import history from the app's earlier names.
+        for name in ["OM Drop", "OM Transfer"] {
+            let old = base.appendingPathComponent(name, isDirectory: true)
+            if !FileManager.default.fileExists(atPath: dir.path), FileManager.default.fileExists(atPath: old.path) {
+                try? FileManager.default.moveItem(at: old, to: dir)
+            }
         }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("imported.json")
@@ -72,7 +74,7 @@ public final class ImportLedger: @unchecked Sendable {
 // MARK: - Destinations
 
 public protocol ImportDestination: Sendable {
-    /// Shown to the user, e.g. "照片圖庫" or "OM Drop 資料夾".
+    /// Shown to the user, e.g. "照片圖庫" or "OM Photos 資料夾".
     var title: String { get }
     /// Ask for permission or check the folder; throws a readable error.
     func prepare() async throws
@@ -102,7 +104,7 @@ public struct FolderDestination: ImportDestination {
     public static func defaultRoot() -> URL {
         let pictures = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Pictures")
-        return pictures.appendingPathComponent("OM Drop", isDirectory: true)
+        return pictures.appendingPathComponent("OM Photos", isDirectory: true)
     }
 
     public func prepare() async throws {
@@ -158,7 +160,7 @@ public struct PhotoLibraryDestination: ImportDestination {
     public func prepare() async throws {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
-            throw ImportError("沒有加入照片的權限。請到 設定 › 隱私權 › 照片 允許 OM Drop「只加入照片」。")
+            throw ImportError("沒有加入照片的權限。請到 設定 › 隱私權 › 照片 允許 OM Photos「只加入照片」。")
         }
     }
 
@@ -231,7 +233,7 @@ public final class Importer {
     private let retries: Int
 
     public init(ledger: ImportLedger, tempDirectory: URL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("OM Drop Import", isDirectory: true), retries: Int = 1) {
+        .appendingPathComponent("OM Photos Import", isDirectory: true), retries: Int = 1) {
         self.ledger = ledger
         self.tempDirectory = tempDirectory
         self.retries = retries

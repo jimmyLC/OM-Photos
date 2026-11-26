@@ -1,4 +1,4 @@
-# OM Drop 規格書（第二版）
+# OM Photos 規格書（第二版）
 
 狀態：**待確認** · 2026-11-26
 
@@ -127,7 +127,8 @@ App（SwiftUI，一份程式碼，兩個 target）
 └─ iOS（iPhone + iPad）
 ```
 
-- XcodeGen 產生專案，Bundle ID `com.jimmylc.OMDrop`。
+- XcodeGen 產生專案。Bundle ID 沿用 `com.jimmylc.OMDrop`（舊名稱），讓配對資料、權限和匯入記錄在改名後保留。
+- 名稱：2026-11-26 由 OM Drop 改為 **OM Photos**，品牌見 `Brand/BRAND.md`；GitHub repo `jimmyLC/OM-Photos`（私人）。
 - Mac 不開沙盒；iOS 必要權限：本地網路、相機（掃 QR）、照片新增、Hotspot Configuration、連線設定允許本地 http。
 - 自動測試用模擬相機（沿用 Python 探測時的做法改成 Swift）。
 - 協定依據：`om-camera-research/PLAN.md`。

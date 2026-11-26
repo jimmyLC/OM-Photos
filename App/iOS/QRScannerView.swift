@@ -11,7 +11,7 @@ struct QRScannerView: View {
         } else {
             ContentUnavailableView("無法使用相機",
                                    systemImage: "camera.badge.ellipsis",
-                                   description: Text("請到 設定 › OM Drop 允許使用相機，或改用「從照片讀取」與手動輸入。"))
+                                   description: Text("請到 設定 › OM Photos 允許使用相機，或改用「從照片讀取」與手動輸入。"))
                 .background(.quaternary)
         }
     }

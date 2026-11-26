@@ -27,7 +27,7 @@ struct RootView: View {
                 NavigationStack {
                     WelcomeView(pair: { showPairing = true })
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .navigationTitle("OM Drop")
+                        .navigationTitle("")  // the logo and name are on the page
                         .toolbar {
                             #if os(iOS)
                             ToolbarItem(placement: .topBarLeading) { settingsButton }
@@ -384,25 +384,21 @@ struct WelcomeView: View {
 
     var body: some View {
         VStack(spacing: 28) {
-            VStack(spacing: 14) {
+            VStack(spacing: 12) {
                 Image("LogoMark")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 128)
-                    .foregroundStyle(.primary)
+                    .frame(width: 176)
                     .accessibilityHidden(true)
-                (Text("OM").fontWeight(.heavy) + Text(" Drop"))
-                    .font(.system(size: 40))
-                Text("SHOOT · CONNECT · IMPORT")
-                    .font(.caption.weight(.medium))
-                    .tracking(3)
+                Text("OM Photos")
+                    .font(.system(size: 38, weight: .bold))
+                Text("把相機裡的照片帶過來，最簡單的方式。")
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
-            Text("先配對一次，之後一鍵連線。")
-                .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 14) {
                 Step(number: 1, text: "相機：選單 › 裝置連線，螢幕會出現 QR code。")
-                Step(number: 2, text: "用 OM Drop 掃描 QR code。")
+                Step(number: 2, text: "用 OM Photos 掃描 QR code。")
                 #if os(iOS) && !HOTSPOT
                 Step(number: 3, text: "之後按「連線」，依提示到設定切換到相機 Wi-Fi，密碼可一鍵複製。")
                 #else
@@ -421,7 +417,7 @@ struct WelcomeView: View {
             Button("改用 USB 記憶卡", systemImage: "cable.connector") { model.pickingVolume = true }
                 .buttonStyle(.glass)
             #endif
-            Text("也可以用 USB 線接相機（相機的 USB 模式選 MTP），OM Drop 會自動偵測。")
+            Text("也可以用 USB 線接相機（相機的 USB 模式選 MTP），OM Photos 會自動偵測。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -509,7 +505,7 @@ struct ConnectionPanel: View {
         switch connection.state {
         case .idle: "相機：選單 › 裝置連線，再按「連線」。"
         case .joiningWiFi(let ssid): ssid
-        case .waitingForUser(let c): "密碼已複製。到 Wi-Fi 設定選擇「\(c.ssid)」，第一次貼上密碼（之後 iPhone 會記住）。回到 OM Drop 就會自動連上。"
+        case .waitingForUser(let c): "密碼已複製。到 Wi-Fi 設定選擇「\(c.ssid)」，第一次貼上密碼（之後 iPhone 會記住）。回到 OM Photos 就會自動連上。"
         case .connected(let info): freeSpaceText(info).map { "記憶卡剩餘 \($0)" }
         case .failed(let why): why
         default: nil
@@ -615,7 +611,7 @@ struct StatusPill: View {
 }
 
 extension View {
-    /// Monochrome brand button: ink in light mode, graphite in dark mode, white label on both.
+    /// Monochrome brand button: black in light mode, dark gray in dark mode, white label on both.
     func brandProminent() -> some View { modifier(BrandProminent()) }
 }
 
@@ -624,6 +620,6 @@ private struct BrandProminent: ViewModifier {
     func body(content: Content) -> some View {
         content
             .buttonStyle(.glassProminent)
-            .tint(scheme == .dark ? Color(red: 0x4A / 255, green: 0x4A / 255, blue: 0x4A / 255) : Color(red: 0x1C / 255, green: 0x1C / 255, blue: 0x1E / 255))
+            .tint(scheme == .dark ? Color(red: 0.2, green: 0.2, blue: 0.2) : .black)
     }
 }

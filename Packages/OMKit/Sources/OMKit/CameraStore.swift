@@ -72,7 +72,7 @@ public struct KeychainCameraStore: CameraStoring {
         try delete(ssid: camera.credentials.ssid)
         var q = base()
         q[kSecAttrAccount as String] = camera.credentials.ssid
-        q[kSecAttrLabel as String] = "OM Drop：\(camera.name)"
+        q[kSecAttrLabel as String] = "OM Photos：\(camera.name)"
         q[kSecAttrSynchronizable as String] = true
         q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         q[kSecValueData as String] = try JSONEncoder().encode(camera)

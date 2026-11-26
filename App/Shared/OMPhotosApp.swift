@@ -2,7 +2,7 @@ import OMKit
 import SwiftUI
 
 @main
-struct OMDropApp: App {
+struct OMPhotosApp: App {
     @State private var model: AppModel
     #if os(macOS)
     @NSApplicationDelegateAdaptor private var delegate: MacAppDelegate

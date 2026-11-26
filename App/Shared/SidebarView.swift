@@ -61,7 +61,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("OM Drop")
+        .navigationTitle("OM Photos")
         .onAppear { selection = .source(model.selectedSource) }
         .onChange(of: model.selectedSource) { _, source in
             if case .source = selection { selection = .source(source) }

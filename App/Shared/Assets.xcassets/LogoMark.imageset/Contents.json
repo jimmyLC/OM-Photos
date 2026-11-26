@@ -1,7 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "logo-mark.png",
+      "filename" : "logo-light.png",
+      "idiom" : "universal"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "logo-dark.png",
       "idiom" : "universal"
     }
   ],
@@ -10,7 +20,6 @@
     "version" : 1
   },
   "properties" : {
-    "preserves-vector-representation" : false,
-    "template-rendering-intent" : "template"
+    "template-rendering-intent" : "original"
   }
 }

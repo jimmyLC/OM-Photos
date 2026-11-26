@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="Brand/lockup-stacked-black.png" width="360" alt="OM Drop">
+  <img src="Brand/lockup-stacked-primary.png" width="420" alt="OM Photos">
 </p>
 
-# OM Drop
+# OM Photos
 
 把 OM System / Olympus 相機的照片和影片快速匯入 **Mac、iPhone、iPad**。
 
@@ -23,7 +23,7 @@
 
 ```bash
 xcodegen generate
-open OMDrop.xcodeproj
+open OMPhotos.xcodeproj
 ```
 
 在 `project.yml` 把 `DEVELOPMENT_TEAM` 換成你自己的 Team ID。

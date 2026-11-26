@@ -218,7 +218,7 @@ final class AppModel {
 
     /// iPhone/iPad large title.
     var screenTitle: String {
-        showsLibrary ? "圖庫" : "OM Drop"
+        showsLibrary ? "圖庫" : "OM Photos"
     }
 
     /// The centre of the selection bar, as in Photos.
