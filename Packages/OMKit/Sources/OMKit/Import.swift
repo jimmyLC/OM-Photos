@@ -82,13 +82,16 @@ public struct ImportError: Error, LocalizedError, Equatable {
     public var errorDescription: String? { message }
 }
 
-/// `<root>/<YYYY-MM-DD>/<original name>`; never overwrites a different file.
+/// Files go into `root` (or `<root>/<YYYY-MM-DD>/` with `daySubfolders`);
+/// never overwrites a different file.
 public struct FolderDestination: ImportDestination {
     public let root: URL
+    public let daySubfolders: Bool
     public var title: String { root.lastPathComponent }
 
-    public init(root: URL) {
+    public init(root: URL, daySubfolders: Bool = false) {
         self.root = root
+        self.daySubfolders = daySubfolders
     }
 
     public static func defaultRoot() -> URL {
@@ -98,10 +101,12 @@ public struct FolderDestination: ImportDestination {
     }
 
     public func prepare() async throws {
-        do {
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        } catch {
-            throw ImportError("無法建立資料夾「\(root.path)」：\(error.localizedDescription)")
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else {
+            throw ImportError("找不到資料夾「\(root.path)」。")
+        }
+        guard FileManager.default.isWritableFile(atPath: root.path) else {
+            throw ImportError("無法寫入資料夾「\(root.lastPathComponent)」。")
         }
     }
 
@@ -109,8 +114,10 @@ public struct FolderDestination: ImportDestination {
         let fm = FileManager.default
         var folder = root
         for (file, temp) in files {
-            folder = root.appendingPathComponent(Self.dayName(file.date), isDirectory: true)
-            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            if daySubfolders {
+                folder = root.appendingPathComponent(Self.dayName(file.date), isDirectory: true)
+                try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            }
             var target = folder.appendingPathComponent(file.name)
             var n = 1
             while fm.fileExists(atPath: target.path) {

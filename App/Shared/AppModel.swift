@@ -79,6 +79,16 @@ final class AppModel {
     private func prepare(_ items: [MediaItem], title: String) {
         guard let source = library.source, !items.isEmpty, !importer.isRunning else { return }
         let estimate = Importer.estimate(items, source: source)
+        #if os(macOS)
+        if ImportSettings.kind == .folder {
+            let time = Duration.seconds(max(estimate.seconds, 1))
+                .formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide, maximumUnitCount: 2))
+            let message = "\(title)：\(items.count) 項，共 \(estimate.bytes.formatted(.byteCount(style: .file)))，預估約 \(time)。"
+            guard let folder = ImportSettings.chooseFolder(message: message) else { return }
+            importer.start(items, from: source, to: FolderDestination(root: folder))
+            return
+        }
+        #endif
         pendingImport = PendingImport(items: items, title: title, bytes: estimate.bytes,
                                       seconds: estimate.seconds, destination: ImportSettings.destinationTitle)
     }
@@ -94,6 +104,47 @@ final class AppModel {
     }
 
     var importError: String?
+
+    // MARK: Delete
+
+    /// Items waiting for the user's OK to be deleted from the card.
+    var pendingDelete: [MediaItem]?
+    /// Result message after deleting (shown briefly).
+    var deleteMessage: String?
+
+    func askDeleteSelected() {
+        let items = library.selectedItems
+        guard !items.isEmpty, !importer.isRunning, !library.isDeleting else { return }
+        pendingDelete = items
+    }
+
+    func confirmDelete() async {
+        guard let items = pendingDelete else { return }
+        pendingDelete = nil
+        let r = await library.delete(items)
+        var parts: [String] = []
+        if r.deleted > 0 { parts.append("已從相機刪除 \(r.deleted) 項") }
+        if !r.failed.isEmpty { parts.append("\(r.failed.count) 項刪除失敗（\(r.failed.prefix(3).joined(separator: "、"))）") }
+        if r.skippedProtected > 0 { parts.append("略過 \(r.skippedProtected) 項受保護的檔案") }
+        deleteMessage = parts.isEmpty ? nil : parts.joined(separator: "，")
+    }
+
+    /// Text for the delete confirmation.
+    func deleteSummary(_ items: [MediaItem]) -> String {
+        let protected = items.filter(\.isProtected)
+        let deletable = items.filter { !$0.isProtected }
+        let notImported = deletable.filter { !library.importedIDs.contains($0.id) }
+        var lines: [String] = []
+        let names = deletable.prefix(8).map { $0.files.map(\.name).joined(separator: " + ") }
+        lines.append(names.joined(separator: "\n") + (deletable.count > 8 ? "\n…等 \(deletable.count) 項" : ""))
+        if !notImported.isEmpty {
+            lines.append("⚠️ 其中 \(notImported.count) 項還沒有匯入：\n" + notImported.prefix(5).map(\.primary.name).joined(separator: "、")
+                         + (notImported.count > 5 ? "…" : ""))
+        }
+        if !protected.isEmpty { lines.append("\(protected.count) 項在相機上設為保護，會略過。") }
+        lines.append("刪除後無法復原。")
+        return lines.joined(separator: "\n\n")
+    }
 
     /// After the list loads: import new items automatically if the user turned that on.
     func autoImportIfWanted() {

@@ -23,6 +23,8 @@ public protocol CameraSource: Sendable {
     func prepareForImport() async
     /// Starting guess for the time estimate, in bytes per second.
     var typicalSpeed: Double { get }
+    /// Permanently delete a file from the card.
+    func delete(_ file: MediaFile) async throws
 }
 
 // MARK: - Wi-Fi
@@ -73,6 +75,15 @@ public struct WiFiSource: CameraSource {
     public func download(_ file: MediaFile, to destination: URL,
                          progress: @escaping @Sendable (Int64) -> Void) async throws -> Int64 {
         try await client.download(file.path, to: destination, progress: progress)
+    }
+
+    public func delete(_ file: MediaFile) async throws {
+        try await client.switchMode(.play)
+        let body = try await client.text("exec_erase.cgi", query: ["DIR": file.path], timeout: 15)
+        // Some firmware answers 200 with an error text.
+        if body.lowercased().contains("error") || body.lowercased().contains("fail") {
+            throw CameraError.badResponse(XML.value("errorcode", in: body).map { "刪除失敗（代碼 \($0)）" } ?? "刪除失敗")
+        }
     }
 
     private func list(_ dir: String) async throws -> [ListEntry] {
@@ -189,6 +200,14 @@ public struct VolumeSource: CameraSource {
     public var typicalSpeed: Double { 40_000_000 }  // measured 44.6 MB/s in Storage mode
 
     public func prepareForImport() async {}
+
+    public func delete(_ file: MediaFile) async throws {
+        let target = url(for: file)
+        try await Task.detached {
+            // Removed for good, like deleting on the camera (no Trash on the card).
+            try FileManager.default.removeItem(at: target)
+        }.value
+    }
 
     public func download(_ file: MediaFile, to destination: URL,
                          progress: @escaping @Sendable (Int64) -> Void) async throws -> Int64 {

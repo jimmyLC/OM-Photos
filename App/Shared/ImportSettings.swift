@@ -31,10 +31,9 @@ enum ImportSettings {
     /// The chosen folder, or nil on iOS when none was picked yet.
     static var folder: URL? {
         #if os(macOS)
-        if let path = UserDefaults.standard.string(forKey: SettingKey.destinationFolderPath) {
-            return URL(fileURLWithPath: path, isDirectory: true)
-        }
-        return FolderDestination.defaultRoot()
+        // The folder chosen last time (the app never creates one on its own).
+        guard let path = UserDefaults.standard.string(forKey: SettingKey.destinationFolderPath) else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
         #else
         guard let data = UserDefaults.standard.data(forKey: SettingKey.destinationFolderBookmark) else { return nil }
         var stale = false
@@ -57,6 +56,26 @@ enum ImportSettings {
         }
         #endif
     }
+
+    #if os(macOS)
+    /// Ask where to import, starting at the folder used last time.
+    /// The panel doubles as the confirmation: it shows what will be imported.
+    @MainActor
+    static func chooseFolder(message: String) -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.title = "選擇匯入的資料夾"
+        panel.message = message
+        panel.prompt = "匯入到這裡"
+        panel.directoryURL = folder ?? FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        setFolder(url)
+        return url
+    }
+    #endif
 
     static var destinationTitle: String {
         switch kind {

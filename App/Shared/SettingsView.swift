@@ -78,7 +78,7 @@ private struct ImportSettingsSection: View {
             .onChange(of: kind) { _, k in ImportSettings.kind = k }
             if kind == .folder {
                 HStack {
-                    Text(folderName.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "尚未選擇")
+                    Text(folderName.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "尚未選擇（匯入時會詢問）")
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -90,7 +90,11 @@ private struct ImportSettingsSection: View {
         } header: {
             Text("匯入")
         } footer: {
-            Text(kind == .folder ? "照片依拍攝日期放進子資料夾，例如 2026-11-26。" : "RAW+JPG 會存成同一張照片。")
+            #if os(macOS)
+            Text(kind == .folder ? "每次匯入前都會詢問資料夾，預設是上次選的。檔案直接放進資料夾，不另建子資料夾。" : "RAW+JPG 會存成同一張照片。")
+            #else
+            Text(kind == .folder ? "檔案直接放進選擇的資料夾。" : "RAW+JPG 會存成同一張照片。")
+            #endif
         }
         #if os(iOS)
         .fileImporter(isPresented: $picking, allowedContentTypes: [.folder]) { result in

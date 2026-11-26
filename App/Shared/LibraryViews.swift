@@ -117,6 +117,11 @@ struct PhotoGrid: View {
             library.clearSelection()
             return .handled
         }
+        .onKeyPress(.delete) {
+            guard !library.selection.isEmpty else { return .ignored }
+            model.askDeleteSelected()
+            return .handled
+        }
         .onKeyPress(characters: ["a"]) { press in
             guard press.modifiers.contains(.command) else { return .ignored }
             library.selectAll()
@@ -271,6 +276,27 @@ struct SummaryBar: View {
                 ImportProgressView()
             case .finished(let summary):
                 ImportResultView(summary: summary)
+            case .idle where library.isDeleting:
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("正在從相機刪除…")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            case .idle where model.deleteMessage != nil:
+                HStack(spacing: 10) {
+                    Image(systemName: "trash").foregroundStyle(.secondary)
+                    Text(model.deleteMessage ?? "")
+                    Button { model.deleteMessage = nil } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("關閉")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .task {
+                    try? await Task.sleep(for: .seconds(6))
+                    model.deleteMessage = nil
+                }
             case .idle:
                 HStack(spacing: 12) {
                     if library.selection.isEmpty {
@@ -290,6 +316,13 @@ struct SummaryBar: View {
                         Text("已選 \(library.selectedItems.count) 項 · \(library.selectedSize.formatted(.byteCount(style: .file)))")
                         Button("取消選取") { library.clearSelection() }
                             .buttonStyle(.borderless)
+                        Button(role: .destructive) {
+                            model.askDeleteSelected()
+                        } label: {
+                            Label("刪除", systemImage: "trash")
+                        }
+                        .buttonStyle(.glass)
+                        .disabled(library.isDeleting)
                         Button {
                             model.askImportSelected()
                         } label: {

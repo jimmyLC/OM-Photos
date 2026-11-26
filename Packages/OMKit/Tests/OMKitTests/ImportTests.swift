@@ -3,7 +3,7 @@ import Testing
 @testable import OMKit
 
 /// A source backed by an in-memory card, with optional failures.
-final class MemorySource: CameraSource, @unchecked Sendable {
+class MemorySource: CameraSource, @unchecked Sendable {
     var kind: SourceKind { .usb }
     var cacheKey: String { "memory" }
     var typicalSpeed: Double { 1_000_000 }
@@ -27,6 +27,13 @@ final class MemorySource: CameraSource, @unchecked Sendable {
     func preview(for file: MediaFile) async throws -> Data { Data() }
     func movieInfo(for file: MediaFile) async throws -> MovieInfo { MovieInfo(duration: nil, resolution: nil) }
     func prepareForImport() async {}
+    var deleteFailures: Set<String> = []
+    func delete(_ file: MediaFile) async throws {
+        try lock.withLock {
+            if deleteFailures.contains(file.name) { throw CameraError.http(status: 520, code: "1001") }
+            contents[file.path] = nil
+        }
+    }
 
     func download(_ file: MediaFile, to destination: URL, progress: @escaping @Sendable (Int64) -> Void) async throws -> Int64 {
         if delay > .zero { try await Task.sleep(for: delay) }
@@ -51,6 +58,27 @@ struct ImportTests {
 
     func importer(_ ledger: ImportLedger) -> Importer {
         Importer(ledger: ledger, tempDirectory: tmp.appendingPathComponent("temp"))
+    }
+
+    func folder(_ name: String) throws -> URL {
+        let url = tmp.appendingPathComponent(name)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test func flatFolderAndMissingFolder() async throws {
+        let source = MemorySource(["/D/A.JPG": Data(count: 5), "/D/A.ORF": Data(count: 6)])
+        let out = try folder("flat")
+        let imp = importer(ImportLedger(url: nil))
+        imp.start(MediaItem.group(source.files()), from: source, to: FolderDestination(root: out))
+        _ = await waitDone(imp)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: out.path).sorted() == ["A.JPG", "A.ORF"])
+
+        let imp2 = importer(ImportLedger(url: nil))
+        imp2.start(MediaItem.group(source.files()), from: source, to: FolderDestination(root: tmp.appendingPathComponent("nope")))
+        let s = await waitDone(imp2)
+        #expect(s.error?.contains("找不到資料夾") == true)
+        #expect(!FileManager.default.fileExists(atPath: tmp.appendingPathComponent("nope").path))  // never created
     }
 
     func waitDone(_ importer: Importer) async -> ImportSummary {
@@ -78,7 +106,8 @@ struct ImportTests {
         imp.onRunningChange = { running.append($0) }
         let items = MediaItem.group(source.files())
 
-        imp.start(items, from: source, to: FolderDestination(root: root))
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        imp.start(items, from: source, to: FolderDestination(root: root, daySubfolders: true))
         let s = await waitDone(imp)
         #expect(s.imported == 3)
         #expect(s.failed.isEmpty)
@@ -105,7 +134,7 @@ struct ImportTests {
         let ledger = ImportLedger(url: nil)
         let imp = importer(ledger)
         let items = MediaItem.group(source.files())
-        imp.start(items, from: source, to: FolderDestination(root: tmp.appendingPathComponent("out2")))
+        imp.start(items, from: source, to: FolderDestination(root: try folder("out2")))
         let s = await waitDone(imp)
         #expect(s.imported == 1)
         #expect(Set(s.failed) == ["B.JPG", "C.JPG"])
@@ -122,7 +151,7 @@ struct ImportTests {
         try FileManager.default.createDirectory(at: dayFolder, withIntermediateDirectories: true)
         try Data("other".utf8).write(to: dayFolder.appendingPathComponent("A.JPG"))
         let imp = importer(ImportLedger(url: nil))
-        imp.start(MediaItem.group([file]), from: source, to: FolderDestination(root: tmp.appendingPathComponent("out3")))
+        imp.start(MediaItem.group([file]), from: source, to: FolderDestination(root: tmp.appendingPathComponent("out3"), daySubfolders: true))
         _ = await waitDone(imp)
         #expect(try String(contentsOf: dayFolder.appendingPathComponent("A.JPG"), encoding: .utf8) == "other")
         #expect(try Data(contentsOf: dayFolder.appendingPathComponent("A (1).JPG")).count == 20)
@@ -133,30 +162,13 @@ struct ImportTests {
         source.delay = .milliseconds(30)
         let ledger = ImportLedger(url: nil)
         let imp = importer(ledger)
-        imp.start(MediaItem.group(source.files()), from: source, to: FolderDestination(root: tmp.appendingPathComponent("out4")))
+        imp.start(MediaItem.group(source.files()), from: source, to: FolderDestination(root: try folder("out4")))
         try await Task.sleep(for: .milliseconds(100))
         imp.cancel()
         let s = await waitDone(imp)
         #expect(s.cancelled)
         #expect(s.imported < 20)
         #expect(ledger.count == s.imported)
-    }
-
-    @Test func wifiDownloadStreamsAndChecksStatus() async throws {
-        FakeCard.lock.withLock {
-            FakeCard.listing = [:]
-            FakeCard.jpeg = Data(repeating: 7, count: 123_456)
-        }
-        let client = CameraClient(session: FakeCard.session())
-        let dest = tmp.appendingPathComponent("dl.bin")
-        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
-        // FakeCard serves JPEG bytes for get_thumbnail; use that path to exercise streaming.
-        let n = try await client.download("/get_thumbnail.cgi", to: dest) { _ in }
-        #expect(n == 123_456)
-        #expect(try Data(contentsOf: dest).count == 123_456)
-        await #expect(throws: CameraError.self) {
-            _ = try await client.download("/get_imglist.cgi", to: dest) { _ in }  // 404 here
-        }
     }
 
     @Test func usbCopy() async throws {
@@ -180,4 +192,69 @@ final class ProgressBox: @unchecked Sendable {
     private var count = 0
     func add(_: Int64) { lock.withLock { count += 1 } }
     var calls: Int { lock.withLock { count } }
+}
+
+@MainActor @Suite(.serialized)
+struct DeleteTests {
+    @Test func deletesWholeItemsSkipsProtectedReportsFailures() async {
+        let source = ProtectedSource([
+            "/D/A.JPG": Data(count: 1), "/D/A.ORF": Data(count: 1),
+            "/D/B.JPG": Data(count: 1), "/D/C.JPG": Data(count: 1), "/D/L.JPG": Data(count: 1),
+        ])
+        source.protectedNames = ["L.JPG"]
+        source.deleteFailures = ["C.JPG"]
+        let library = LibraryModel(images: ImageStore(directory: nil))
+        await library.setSource(source)
+        library.selectAll()
+        let result = await library.delete(library.selectedItems)
+        #expect(result.deleted == 2)
+        #expect(result.failed == ["C.JPG"])
+        #expect(result.skippedProtected == 1)
+        #expect(Set(source.contents.keys) == ["/D/C.JPG", "/D/L.JPG"])  // A.JPG and A.ORF both gone
+        #expect(Set(library.items.map(\.primary.name)) == ["C.JPG", "L.JPG"])  // list reloaded
+        #expect(library.selection.isEmpty)
+    }
+
+    @Test func usbDelete() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("omkit-del-\(UUID())")
+        let dir = root.appendingPathComponent("DCIM/100OMSYS")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: dir.appendingPathComponent("P1.JPG"))
+        let source = VolumeSource(root: root)
+        try await source.delete(try await source.listFiles()[0])
+        #expect(try await source.listFiles().isEmpty)
+    }
+}
+
+final class ProtectedSource: MemorySource, @unchecked Sendable {
+    var protectedNames: Set<String> = []
+    override func files() -> [MediaFile] {
+        super.files().map { var f = $0; f.isProtected = protectedNames.contains(f.name); return f }
+    }
+}
+
+/// Tests that use the shared FakeCard run in SourceTests' serialized suite.
+extension SourceTests {
+    @Test func wifiDownloadStreamsAndChecksStatus() async throws {
+        FakeCard.lock.withLock {
+            FakeCard.listing = [:]
+            FakeCard.jpeg = Data(repeating: 7, count: 123_456)
+        }
+        let client = CameraClient(session: FakeCard.session())
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("omkit-dl-\(UUID()).bin")
+        // FakeCard serves JPEG bytes for get_thumbnail; use that path to exercise streaming.
+        let n = try await client.download("/get_thumbnail.cgi", to: dest) { _ in }
+        #expect(n == 123_456)
+        #expect(try Data(contentsOf: dest).count == 123_456)
+        await #expect(throws: CameraError.self) {
+            _ = try await client.download("/get_imglist.cgi", to: dest) { _ in }  // 404 here
+        }
+    }
+
+    @Test func wifiErase() async throws {
+        FakeCard.lock.withLock { FakeCard.hits = []; FakeCard.listing = [:] }
+        let source = WiFiSource(client: CameraClient(session: FakeCard.session()), cameraID: "D", settle: .zero)
+        try await source.delete(MediaFile(path: "/DCIM/100OMSYS/P1.JPG", size: 1, date: .now))
+        #expect(FakeCard.hits.contains("/exec_erase.cgi?DIR=/DCIM/100OMSYS/P1.JPG"))
+    }
 }

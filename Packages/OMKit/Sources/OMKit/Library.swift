@@ -100,6 +100,47 @@ public final class LibraryModel {
         }
     }
 
+    // MARK: Delete
+
+    public struct DeleteResult: Equatable, Sendable {
+        public var deleted = 0
+        public var failed: [String] = []
+        public var skippedProtected = 0
+    }
+
+    public private(set) var isDeleting = false
+
+    /// Delete whole items (RAW and JPG together) from the card, then reload the list.
+    /// Protected items are skipped. Files are deleted one at a time.
+    public func delete(_ targets: [MediaItem]) async -> DeleteResult {
+        var result = DeleteResult()
+        guard let source, !isDeleting else { return result }
+        isDeleting = true
+        defer { isDeleting = false }
+        for item in targets {
+            if item.isProtected {
+                result.skippedProtected += 1
+                continue
+            }
+            var ok = true
+            for file in item.files {
+                do {
+                    try await source.delete(file)
+                } catch {
+                    ok = false
+                }
+            }
+            if ok {
+                result.deleted += 1
+            } else {
+                result.failed.append(item.primary.name)
+            }
+        }
+        selection.subtract(targets.map(\.id))
+        await reload()
+        return result
+    }
+
     // MARK: Selection
 
     public func select(_ item: MediaItem, extend: Bool, toggle: Bool) {

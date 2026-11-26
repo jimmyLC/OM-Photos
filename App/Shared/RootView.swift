@@ -95,6 +95,14 @@ struct RootView: View {
         } message: { pending in
             Text(importMessage(pending))
         }
+        .alert("從相機刪除 \(model.pendingDelete?.filter { !$0.isProtected }.count ?? 0) 項？", isPresented: .init(
+            get: { model.pendingDelete != nil }, set: { if !$0 { model.pendingDelete = nil } }
+        ), presenting: model.pendingDelete) { _ in
+            Button("取消", role: .cancel) {}
+            Button("刪除", role: .destructive) { Task { await model.confirmDelete() } }
+        } message: { items in
+            Text(model.deleteSummary(items))
+        }
         .alert("無法匯入", isPresented: .init(get: { model.importError != nil }, set: { if !$0 { model.importError = nil } })) {
             Button("好") {}
         } message: {
