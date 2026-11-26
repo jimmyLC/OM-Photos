@@ -80,7 +80,7 @@ const T = {
     onPage: '本頁內容', prev: '上一篇', next: '下一篇', allGuides: '所有教學',
     groups: { start: '開始使用', connect: '連接相機', use: '瀏覽、匯入與刪除', help: '說明' },
     footTag: '把相機裡的照片帶過來，最簡單的方式。',
-    footProduct: '產品', footLearn: '教學', footMore: '更多', features: '功能', demo: 'Demo', download: '下載', privacy: '隱私權政策', releases: '版本紀錄', source: '原始碼', contact: '聯絡我們',
+    footProduct: '產品', footLearn: '教學', footMore: '更多', features: '功能', demo: 'Demo', download: '下載', privacy: '隱私權政策', contact: '聯絡我們',
   },
   en: {
     nav: [['/#features', 'Features'], ['/demo/', 'Demo'], ['/guide/', 'Guides'], ['/download/', 'Download']],
@@ -90,7 +90,7 @@ const T = {
     onPage: 'On this page', prev: 'Previous', next: 'Next', allGuides: 'All guides',
     groups: { start: 'Get started', connect: 'Connect your camera', use: 'Browse, import and delete', help: 'Help' },
     footTag: 'The simplest way to bring photos from your camera.',
-    footProduct: 'Product', footLearn: 'Guides', footMore: 'More', features: 'Features', demo: 'Demo', download: 'Download', privacy: 'Privacy', releases: 'Release notes', source: 'Source code', contact: 'Contact',
+    footProduct: 'Product', footLearn: 'Guides', footMore: 'More', features: 'Features', demo: 'Demo', download: 'Download', privacy: 'Privacy', contact: 'Contact',
   },
 };
 
@@ -103,7 +103,7 @@ const footer = (lang) => { const t = T[lang]; return `<footer class="site-foot">
 <div>${brand(lang)}<p class="foot-tag">${t.footTag}</p></div>
 <div><h4>${t.footProduct}</h4><a href="${p(lang, '/#features')}">${t.features}</a><a href="${p(lang, '/demo/')}">${t.demo}</a><a href="${p(lang, '/download/')}">${t.download}</a></div>
 <div><h4>${t.footLearn}</h4>${guides[lang].slice(0, 5).map((g) => `<a href="${p(lang, `/guide/${g.slug}/`)}">${esc(g.title.split(/[（(]/)[0].trim())}</a>`).join('')}</div>
-<div><h4>${t.footMore}</h4><a href="${cfg.mac.releases}" rel="noopener" target="_blank">${t.releases}</a><a href="${p(lang, '/privacy/')}">${t.privacy}</a><a href="mailto:${cfg.contactEmail}">${t.contact}</a></div>
+<div><h4>${t.footMore}</h4><a href="${p(lang, '/privacy/')}">${t.privacy}</a><a href="mailto:${cfg.contactEmail}">${t.contact}</a></div>
 </div><p class="copy">© ${new Date().getFullYear()} OM Photos</p></div></footer>`; };
 
 const gaTag = cfg.ga4MeasurementId ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${cfg.ga4MeasurementId}"></script>
@@ -323,14 +323,14 @@ for (const lang of Object.keys(LANGS)) {
     first: '第一次開啟', firstSteps: ['打開 DMG，把 OM Photos 拖到「應用程式」。', '打開 OM Photos；看到「無法打開」時按「完成」。', '到「系統設定 › 隱私權與安全性」，在 OM Photos 旁按「強制打開」。只需要做一次。'],
     firstWhy: '這個版本沒有 Apple 開發者簽章，所以 macOS 會先擋一次。',
     iosH: 'iPhone · iPad', iosD: '開發中，即將推出。和 Mac 版一樣能掃 QR code 配對、瀏覽、篩選、匯入到照片圖庫與刪除。',
-    notes: '所有版本與更新紀錄', more: '安裝教學',
+    more: '安裝教學',
   } : {
     title: 'Download OM Photos for Mac (free)', description: `Download OM Photos ${cfg.mac.version}, the free photo import app for OM System and Olympus cameras, for Apple silicon and Intel Macs running ${cfg.mac.requires} or later. iPhone and iPad coming soon.`,
     h1: 'Download OM Photos', macH: 'Mac', macD: `Version ${cfg.mac.version} · ${cfg.mac.size} · ${cfg.mac.requires} or later · Apple silicon and Intel`,
     first: 'First launch', firstSteps: ['Open the DMG and drag OM Photos to Applications.', 'Open OM Photos; when macOS says it cannot be opened, click Done.', 'Go to System Settings › Privacy & Security and click Open Anyway next to OM Photos. You only do this once.'],
     firstWhy: 'This build is not signed with an Apple Developer ID, so macOS blocks it once.',
     iosH: 'iPhone · iPad', iosD: 'In development, coming soon: pair with a QR code, browse, filter, import to your Photos library and delete, just like on the Mac.',
-    notes: 'All versions and release notes', more: 'Installation guide',
+    more: 'Installation guide',
   };
   page({
     lang, path: p(lang, '/download/'), alt: both('/download/'), cur: '/download/', title: D.title, description: D.description,
@@ -338,7 +338,7 @@ for (const lang of Object.keys(LANGS)) {
     body: `<section class="page-head"><div class="wrap">${crumbHtml([home, { name: t.download, path: p(lang, '/download/') }])}<h1>${D.h1}</h1></div></section>
 <section class="section tight"><div class="wrap dl-grid">
   <div class="dl-card main"><img src="/app-icon.png" width="96" height="96" alt=""><h2>${D.macH}</h2><p>${D.macD}</p>${macBtn(lang)}
-    <p class="small"><a href="${cfg.mac.releases}" rel="noopener" target="_blank">${D.notes}</a> · <a href="${p(lang, '/guide/install-mac/')}">${D.more}</a></p>
+    <p class="small"><a href="${p(lang, '/guide/install-mac/')}">${D.more}</a></p>
     <div class="first"><h3>${D.first}</h3><ol>${D.firstSteps.map((s) => `<li>${s}</li>`).join('')}</ol><p class="small">${D.firstWhy}</p></div></div>
   <div class="dl-card muted"><div class="phone-ico"><svg viewBox="0 0 24 24" width="64" height="64" aria-hidden="true"><rect x="6.5" y="2" width="11" height="20" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 19h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></div><h2>${D.iosH}</h2><p>${D.iosD}</p><span class="btn disabled" aria-disabled="true">Coming soon</span></div>
 </div></section>`,

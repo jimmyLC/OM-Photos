@@ -9,7 +9,6 @@
     "version": "0.1.0",
     "size": "3 MB",
     "requires": "macOS 27",
-    "url": "/download/mac",
-    "releases": "https://github.com/jimmyLC/OM-Photos/releases"
+    "url": "/download/mac"
   }
 }
