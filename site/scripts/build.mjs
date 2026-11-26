@@ -81,7 +81,6 @@ const T = {
     groups: { start: '開始使用', connect: '連接相機', use: '瀏覽、匯入與刪除', help: '說明' },
     footTag: '把相機裡的照片帶過來，最簡單的方式。',
     footProduct: '產品', footLearn: '教學', footMore: '更多', features: '功能', demo: 'Demo', download: '下載', privacy: '隱私權政策', releases: '版本紀錄', source: '原始碼', contact: '聯絡我們',
-    legal: '非官方工具，與 OM Digital Solutions 無關。OM SYSTEM、OLYMPUS、OI.Share 為其各自所有人的商標。',
   },
   en: {
     nav: [['/#features', 'Features'], ['/demo/', 'Demo'], ['/guide/', 'Guides'], ['/download/', 'Download']],
@@ -92,7 +91,6 @@ const T = {
     groups: { start: 'Get started', connect: 'Connect your camera', use: 'Browse, import and delete', help: 'Help' },
     footTag: 'The simplest way to bring photos from your camera.',
     footProduct: 'Product', footLearn: 'Guides', footMore: 'More', features: 'Features', demo: 'Demo', download: 'Download', privacy: 'Privacy', releases: 'Release notes', source: 'Source code', contact: 'Contact',
-    legal: 'Unofficial tool, not affiliated with OM Digital Solutions. OM SYSTEM, OLYMPUS and OI.Share are trademarks of their respective owners.',
   },
 };
 
@@ -105,8 +103,8 @@ const footer = (lang) => { const t = T[lang]; return `<footer class="site-foot">
 <div>${brand(lang)}<p class="foot-tag">${t.footTag}</p></div>
 <div><h4>${t.footProduct}</h4><a href="${p(lang, '/#features')}">${t.features}</a><a href="${p(lang, '/demo/')}">${t.demo}</a><a href="${p(lang, '/download/')}">${t.download}</a></div>
 <div><h4>${t.footLearn}</h4>${guides[lang].slice(0, 5).map((g) => `<a href="${p(lang, `/guide/${g.slug}/`)}">${esc(g.title.split(/[（(]/)[0].trim())}</a>`).join('')}</div>
-<div><h4>${t.footMore}</h4><a href="${cfg.mac.releases}" rel="noopener" target="_blank">${t.releases}</a><a href="${cfg.repo}" rel="noopener" target="_blank">${t.source}</a><a href="${p(lang, '/privacy/')}">${t.privacy}</a><a href="mailto:${cfg.contactEmail}">${t.contact}</a></div>
-</div><p class="copy">© ${new Date().getFullYear()} OM Photos. ${t.legal}</p></div></footer>`; };
+<div><h4>${t.footMore}</h4><a href="${cfg.mac.releases}" rel="noopener" target="_blank">${t.releases}</a><a href="${p(lang, '/privacy/')}">${t.privacy}</a><a href="mailto:${cfg.contactEmail}">${t.contact}</a></div>
+</div><p class="copy">© ${new Date().getFullYear()} OM Photos</p></div></footer>`; };
 
 const gaTag = cfg.ga4MeasurementId ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${cfg.ga4MeasurementId}"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${cfg.ga4MeasurementId}');</script>` : '';
@@ -205,7 +203,7 @@ const HOME = {
     faq: [
       ['OM Photos 要錢嗎？', '免費。Mac 版可以直接從下載頁下載。'],
       ['支援哪些相機？', '目前在 OM System OM-3 上完整實測。其他支援 OI.Share／OM Image Share 的 OM System 與 Olympus 機型使用相同的連線方式，理論上也能用，但還沒逐一測試。'],
-      ['跟官方的 OM Image Share（OI.Share）有什麼不同？', 'OM Photos 是專為 Mac 做的非官方工具：依日期瀏覽、RAW+JPG 合併、多選匯入到你選的資料夾、匯入過不重複、刪除記憶卡照片，也支援 USB-C 高速傳輸。'],
+      ['跟官方的 OM Image Share（OI.Share）有什麼不同？', 'OM Photos 是專為 Mac 做的工具：依日期瀏覽、RAW+JPG 合併、多選匯入到你選的資料夾、匯入過不重複、刪除記憶卡照片，也支援 USB-C 高速傳輸。'],
       ['可以匯入 RAW 和影片嗎？', '可以。RAW（.ORF）、JPG、MOV、MP4 都能匯入；同一張的 RAW 和 JPG 會合成一格顯示，並一起匯入。'],
       ['為什麼 Wi-Fi 連著相機時不能上網？', '相機開出的 Wi-Fi 沒有網際網路。OM Photos 會在連線時自動切過去，中斷連線後再切回你原本的網路。'],
       ['第一次打開時說「無法打開」怎麼辦？', '這個版本沒有 Apple 開發者簽章。到「系統設定 › 隱私權與安全性」，在 OM Photos 旁邊按「強制打開」即可，只需要做一次。'],
@@ -239,7 +237,7 @@ const HOME = {
     faq: [
       ['Is OM Photos free?', 'Yes. Download the Mac app from the download page.'],
       ['Which cameras work?', 'OM Photos is fully tested with the OM System OM-3. Other OM System and Olympus models that work with OI.Share / OM Image Share use the same connection and should work, but have not all been tested.'],
-      ['How is it different from OM Image Share (OI.Share)?', 'OM Photos is an unofficial Mac app: browse by date, RAW+JPG merged, import a selection to the folder you choose, never import twice, delete from the card, and fast USB-C transfers.'],
+      ['How is it different from OM Image Share (OI.Share)?', 'OM Photos is a Mac app: browse by date, RAW+JPG merged, import a selection to the folder you choose, never import twice, delete from the card, and fast USB-C transfers.'],
       ['Can it import RAW and video?', 'Yes. RAW (.ORF), JPG, MOV and MP4. The RAW and JPG of the same shot appear as one and are imported together.'],
       ['Why is my Mac offline on the camera Wi-Fi?', 'The camera’s own Wi-Fi has no internet. OM Photos switches to it while connected and back to your network when you disconnect.'],
       ['macOS says it cannot be opened. What now?', 'This build is not signed with an Apple Developer ID. Go to System Settings › Privacy & Security and click Open Anyway next to OM Photos. You only do this once.'],
@@ -323,14 +321,14 @@ for (const lang of Object.keys(LANGS)) {
     title: '下載 OM Photos Mac 版（免費）', description: `下載 OM Photos ${cfg.mac.version}，免費的 OM System／Olympus 相機照片匯入 App，支援 ${cfg.mac.requires} 以上的 Apple 晶片與 Intel Mac。iPhone、iPad 版即將推出。`,
     h1: '下載 OM Photos', macH: 'Mac', macD: `版本 ${cfg.mac.version} · ${cfg.mac.size} · ${cfg.mac.requires} 以上 · Apple 晶片與 Intel`,
     first: '第一次開啟', firstSteps: ['打開 DMG，把 OM Photos 拖到「應用程式」。', '打開 OM Photos；看到「無法打開」時按「完成」。', '到「系統設定 › 隱私權與安全性」，在 OM Photos 旁按「強制打開」。只需要做一次。'],
-    firstWhy: '這個版本沒有 Apple 開發者簽章，所以 macOS 會先擋一次。程式碼公開在 GitHub。',
+    firstWhy: '這個版本沒有 Apple 開發者簽章，所以 macOS 會先擋一次。',
     iosH: 'iPhone · iPad', iosD: '開發中，即將推出。和 Mac 版一樣能掃 QR code 配對、瀏覽、篩選、匯入到照片圖庫與刪除。',
     notes: '所有版本與更新紀錄', more: '安裝教學',
   } : {
     title: 'Download OM Photos for Mac (free)', description: `Download OM Photos ${cfg.mac.version}, the free photo import app for OM System and Olympus cameras, for Apple silicon and Intel Macs running ${cfg.mac.requires} or later. iPhone and iPad coming soon.`,
     h1: 'Download OM Photos', macH: 'Mac', macD: `Version ${cfg.mac.version} · ${cfg.mac.size} · ${cfg.mac.requires} or later · Apple silicon and Intel`,
     first: 'First launch', firstSteps: ['Open the DMG and drag OM Photos to Applications.', 'Open OM Photos; when macOS says it cannot be opened, click Done.', 'Go to System Settings › Privacy & Security and click Open Anyway next to OM Photos. You only do this once.'],
-    firstWhy: 'This build is not signed with an Apple Developer ID, so macOS blocks it once. The source code is public on GitHub.',
+    firstWhy: 'This build is not signed with an Apple Developer ID, so macOS blocks it once.',
     iosH: 'iPhone · iPad', iosD: 'In development, coming soon: pair with a QR code, browse, filter, import to your Photos library and delete, just like on the Mac.',
     notes: 'All versions and release notes', more: 'Installation guide',
   };
