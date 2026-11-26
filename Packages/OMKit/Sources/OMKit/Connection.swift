@@ -62,6 +62,9 @@ public final class ConnectionManager {
     /// True when the user switched to the camera Wi-Fi by hand, so they must switch back by hand.
     public private(set) var joinedByUser = false
     public private(set) var storeError: String?
+    /// After a manual join (iPhone without the Hotspot entitlement), turn the camera
+    /// off when disconnecting so the phone returns to its previous Wi-Fi.
+    public var powerOffWhenDone = true
 
     public let client: CameraClient
     private let store: CameraStoring
@@ -183,7 +186,17 @@ public final class ConnectionManager {
         }
         guard joinedByApp else {
             if joinedByUser, isConnected {
-                notice = "請到 設定 › Wi-Fi 切回原本的網路（關掉相機也會自動切回）。"
+                if powerOffWhenDone {
+                    state = .leaving
+                    do {
+                        try await client.powerOff()
+                        notice = "已關閉相機，iPhone 會自動切回原本的 Wi-Fi。"
+                    } catch {
+                        notice = "無法關閉相機。請到 設定 › Wi-Fi 切回原本的網路。"
+                    }
+                } else {
+                    notice = "請到 設定 › Wi-Fi 切回原本的網路（關掉相機也會自動切回）。"
+                }
             }
             joinedByUser = false
             state = .idle

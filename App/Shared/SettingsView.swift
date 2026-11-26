@@ -1,13 +1,10 @@
 import OMKit
 import SwiftUI
 
-enum SettingKey {
-    static let autoDisconnect = "autoDisconnectAfterImport"
-}
-
 struct SettingsView: View {
     @Environment(ConnectionManager.self) private var connection
     @AppStorage(SettingKey.autoDisconnect) private var autoDisconnect = true
+    @AppStorage(SettingKey.powerOffWhenDone) private var powerOffWhenDone = true
     @State private var confirmForget: PairedCamera?
     @State private var error: String?
 
@@ -30,8 +27,18 @@ struct SettingsView: View {
                 Text("相機的 Wi-Fi 密碼存在鑰匙圈，並透過 iCloud 鑰匙圈同步到你的其他裝置。")
             }
 
-            Section("連線") {
+            Section {
                 Toggle("匯入完成後自動中斷並切回原本的 Wi-Fi", isOn: $autoDisconnect)
+                if !connection.switchesWiFiAutomatically {
+                    Toggle("中斷連線時關閉相機", isOn: $powerOffWhenDone)
+                        .onChange(of: powerOffWhenDone) { _, on in connection.powerOffWhenDone = on }
+                }
+            } header: {
+                Text("連線")
+            } footer: {
+                if !connection.switchesWiFiAutomatically {
+                    Text("相機關機後 Wi-Fi 消失，iPhone 會自動回到原本的網路。")
+                }
             }
 
             if let error {

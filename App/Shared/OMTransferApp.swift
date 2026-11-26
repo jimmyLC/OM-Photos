@@ -3,7 +3,7 @@ import SwiftUI
 
 @main
 struct OMTransferApp: App {
-    @State private var connection: ConnectionManager
+    @State private var model: AppModel
     #if os(macOS)
     @NSApplicationDelegateAdaptor private var delegate: MacAppDelegate
     #endif
@@ -14,44 +14,57 @@ struct OMTransferApp: App {
         #else
         let joiner: WiFiJoining = PlatformJoiner.make()
         #endif
-        let manager = ConnectionManager(store: KeychainCameraStore(), joiner: joiner)
-        _connection = State(initialValue: manager)
+        let model = AppModel(connection: ConnectionManager(store: KeychainCameraStore(), joiner: joiner))
+        _model = State(initialValue: model)
         #if os(macOS)
-        MacAppDelegate.connection = manager
+        MacAppDelegate.model = model
         #endif
     }
 
     var body: some Scene {
         #if os(macOS)
         WindowGroup {
-            RootView().environment(connection)
+            RootView()
+                .environment(model)
+                .environment(model.connection)
         }
-        .defaultSize(width: 1100, height: 720)
+        .defaultSize(width: 1180, height: 760)
         .windowToolbarStyle(.unified)
 
         Settings {
             SettingsView()
-                .environment(connection)
+                .environment(model.connection)
                 .frame(width: 520, height: 420)
         }
         #else
         WindowGroup {
-            RootView().environment(connection)
+            RootView()
+                .environment(model)
+                .environment(model.connection)
         }
         #endif
     }
 }
 
 #if os(macOS)
-/// Switch the Wi-Fi back before the app quits.
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
-    @MainActor static var connection: ConnectionManager?
+    @MainActor static var model: AppModel?
+    @MainActor private var watcher: VolumeWatcher?
+
+    @MainActor
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard let model = Self.model else { return }
+        watcher = VolumeWatcher { urls in
+            Task { await model.setVolumes(urls) }
+        }
+    }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
+    /// Switch the Wi-Fi back before the app quits.
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let connection = Self.connection, connection.joinedByApp else { return .terminateNow }
+        guard let connection = Self.model?.connection, connection.joinedByApp else { return .terminateNow }
         Task { @MainActor in
             await connection.disconnect()
             sender.reply(toApplicationShouldTerminate: true)

@@ -141,7 +141,9 @@ public struct VolumeSource: CameraSource {
                 out.append(MediaFile(path: rel.hasPrefix("/") ? rel : "/" + rel,
                                      size: Int64(v?.fileSize ?? 0),
                                      date: v?.contentModificationDate ?? .distantPast,
-                                     isProtected: v?.isUserImmutable == true || v?.isWritable == false))
+                                     // The camera's "protect" sets the FAT read-only bit, which macOS
+                                     // shows as the locked flag. A read-only mount is not "protected".
+                                     isProtected: v?.isUserImmutable == true))
             }
             return out
         }.value

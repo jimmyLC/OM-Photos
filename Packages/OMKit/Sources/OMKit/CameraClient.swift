@@ -65,6 +65,12 @@ public actor CameraClient {
         if settle > .zero { try await Task.sleep(for: settle) }
     }
 
+    /// Turn the camera off. Its Wi-Fi disappears, so a phone that joined it by hand
+    /// falls back to its previous network.
+    public func powerOff() async throws {
+        _ = try await data("exec_pwoff.cgi", timeout: 5)
+    }
+
     // MARK: Transport
 
     public func text(_ cgi: String, query: [String: String] = [:], timeout: TimeInterval = 10) async throws -> String {

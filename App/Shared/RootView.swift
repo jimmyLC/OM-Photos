@@ -2,47 +2,66 @@ import OMKit
 import SwiftUI
 
 struct RootView: View {
+    @Environment(AppModel.self) private var model
     @Environment(ConnectionManager.self) private var connection
     @Environment(\.scenePhase) private var scenePhase
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     @State private var showPairing = false
     @State private var showSettings = false
+    @State private var volumeError: String?
+
+    private var isCompact: Bool {
+        #if os(iOS)
+        sizeClass == .compact
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if connection.cameras.isEmpty {
+        @Bindable var model = model
+        Group {
+            if connection.cameras.isEmpty && model.volumes.isEmpty {
+                NavigationStack {
                     WelcomeView(pair: { showPairing = true })
-                } else {
-                    ConnectionPanel()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .navigationTitle("OM Transfer")
+                        .toolbar { moreMenu }
+                }
+            } else if isCompact {
+                NavigationStack {
+                    DetailView()
+                        .navigationTitle(model.sourceTitle)
+                        #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                        #endif
+                        .toolbar { compactToolbar }
+                }
+            } else {
+                NavigationSplitView {
+                    SidebarView()
+                        .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
+                } detail: {
+                    DetailView()
+                        .navigationTitle(model.sourceTitle)
+                        .toolbar { regularToolbar }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("OM Transfer")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                if !connection.cameras.isEmpty {
-                    ToolbarItem(placement: .principal) { StatusPill() }
-                    ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Button("配對新相機", systemImage: "qrcode.viewfinder") { showPairing = true }
-                            #if os(iOS)
-                            Button("設定", systemImage: "gearshape") { showSettings = true }
-                            #else
-                            SettingsLink { Label("設定…", systemImage: "gearshape") }
-                            #endif
-                        } label: {
-                            Label("更多", systemImage: "ellipsis")
-                        }
-                    }
-                }
+        }
+        .overlay {
+            if model.viewing != nil {
+                ViewerView()
             }
         }
         .sheet(isPresented: $showPairing) {
             PairingView { camera in
                 showPairing = false
-                Task { await connection.connect(camera) }
+                Task {
+                    await model.select(.wifi)
+                    await connection.connect(camera)
+                }
             }
             .environment(connection)
         }
@@ -54,12 +73,28 @@ struct RootView: View {
             }
             .environment(connection)
         }
+        .fileImporter(isPresented: $model.pickingVolume, allowedContentTypes: [.folder]) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                if !(await model.addPickedVolume(url)) {
+                    volumeError = "這個資料夾裡沒有 DCIM。請選擇相機記憶卡的最上層（例如「OM SYSTEM」）。"
+                }
+            }
+        }
         #endif
+        .alert("不是相機記憶卡", isPresented: .init(get: { volumeError != nil }, set: { if !$0 { volumeError = nil } })) {
+            Button("好") {}
+        } message: {
+            Text(volumeError ?? "")
+        }
         .onAppear {
             // First launch: go straight to the scanner.
-            if connection.cameras.isEmpty { showPairing = true }
+            if connection.cameras.isEmpty && model.volumes.isEmpty { showPairing = true }
         }
         .task { await connection.connectIfReachable() }
+        .onChange(of: connection.isConnected) { _, _ in
+            Task { await model.syncSource() }
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {
@@ -72,7 +107,91 @@ struct RootView: View {
             }
         }
     }
+
+    // MARK: Toolbars
+
+    @ToolbarContentBuilder private var regularToolbar: some ToolbarContent {
+        if model.selectedSource == .wifi {
+            ToolbarItem(placement: .principal) { StatusPill() }
+        }
+        if model.library.phase == .loaded {
+            ToolbarItem(placement: .primaryAction) { StatusPicker() }
+            #if os(macOS)
+            ToolbarItem(placement: .primaryAction) { ZoomSlider() }
+            #else
+            ToolbarItem(placement: .primaryAction) { SelectButton() }
+            #endif
+            ToolbarItem(placement: .primaryAction) {
+                Button("重新整理", systemImage: "arrow.clockwise") { Task { await model.library.reload() } }
+                    .keyboardShortcut("r")
+            }
+        }
+        moreMenu
+    }
+
+    @ToolbarContentBuilder private var compactToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) { CompactFilterMenu() }
+        if model.library.phase == .loaded {
+            ToolbarItem(placement: .primaryAction) { SelectButton() }
+        }
+        moreMenu
+    }
+
+    @ToolbarContentBuilder private var moreMenu: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                if model.selectedSource == .wifi, connection.isConnected {
+                    Button("中斷連線", systemImage: "wifi.slash") { Task { await connection.disconnect() } }
+                }
+                Button("配對新相機", systemImage: "qrcode.viewfinder") { showPairing = true }
+                #if os(iOS)
+                Button("設定", systemImage: "gearshape") { showSettings = true }
+                #else
+                SettingsLink { Label("設定…", systemImage: "gearshape") }
+                #endif
+            } label: {
+                Label("更多", systemImage: "ellipsis")
+            }
+        }
+    }
 }
+
+struct StatusPicker: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var library = model.library
+        Picker("狀態", selection: $library.statusFilter) {
+            ForEach(StatusFilter.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+    }
+}
+
+struct SelectButton: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        Button(model.selecting ? "完成" : "選取") {
+            model.selecting.toggle()
+            if !model.selecting { model.library.clearSelection() }
+        }
+    }
+}
+
+#if os(macOS)
+struct ZoomSlider: View {
+    @AppStorage(SettingKey.thumbnailSize) private var cellSize: Double = PhotoGrid.defaultSize
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "square.grid.3x3").imageScale(.small).foregroundStyle(.secondary)
+            Slider(value: $cellSize, in: PhotoGrid.sizeRange)
+                .frame(width: 110)
+                .accessibilityLabel("縮圖大小")
+            Image(systemName: "square.grid.2x2").foregroundStyle(.secondary)
+        }
+    }
+}
+#endif
 
 enum Clipboard {
     static func copy(_ text: String) {

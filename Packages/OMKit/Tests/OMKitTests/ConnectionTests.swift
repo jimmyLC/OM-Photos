@@ -44,7 +44,7 @@ final class FakeCamera: URLProtocol, @unchecked Sendable {
         case "/get_connectmode.cgi": body = "<connectmode>private</connectmode>"
         case "/get_caminfo.cgi": body = "<?xml version=\"1.0\"?><caminfo><model>OM-3</model></caminfo>"
         case "/get_unusedcapacity.cgi": body = unused
-        case "/switch_cammode.cgi": body = ""
+        case "/switch_cammode.cgi", "/exec_pwoff.cgi": body = ""
         default: status = 520; body = "<errorcode>1001</errorcode>"
         }
         let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!
@@ -160,7 +160,29 @@ struct ConnectionTests {
         #expect(m.joinedByUser)
         await m.disconnect()
         #expect(await joiner.leaves == 0)
-        #expect(m.notice?.contains("切回原本的網路") == true)
+        #expect(FakeCamera.requests.contains { $0.hasPrefix("/exec_pwoff.cgi") })
+        #expect(m.notice == "已關閉相機，iPhone 會自動切回原本的 Wi-Fi。")
+    }
+
+    @Test func manualJoinWithoutPowerOff() async {
+        FakeCamera.reset(reachable: true)
+        let joiner = FakeJoiner()
+        await joiner.configure(error: ManualJoinRequired())
+        let m = make(joiner)
+        m.powerOffWhenDone = false
+        await m.connect()
+        await m.disconnect()
+        #expect(!FakeCamera.requests.contains { $0.hasPrefix("/exec_pwoff.cgi") })
+    }
+
+    @Test func automaticJoinNeverPowersOff() async {
+        FakeCamera.reset(reachable: false)
+        let joiner = FakeJoiner()
+        let m = make(joiner)
+        await m.connect()
+        await m.disconnect()
+        #expect(!FakeCamera.requests.contains { $0.hasPrefix("/exec_pwoff.cgi") })
+        #expect(await joiner.leaves == 1)
     }
 
     @Test func cancelWhileWaiting() async {
