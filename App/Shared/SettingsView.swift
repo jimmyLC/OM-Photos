@@ -88,7 +88,8 @@ private struct CameraInfoSection: View {
                 row("序號", d.serial)
                 row("韌體版本", d.firmware)
                 row("鏡頭", d.lens)
-                row("連線方式", model.library.source?.kind == .usb ? "USB 記憶卡" : "Wi-Fi")
+                row("連線方式", connectionName)
+                row("電量", d.battery.map { "\($0)%" })
                 row("記憶卡剩餘", d.freeSpace.map { (d.freeSpaceIsCapped ? "超過 " : "") + bytes($0) })
                 row("記憶卡容量", d.capacity.map(bytes))
                 row("檔案數", d.fileCount.map { "\($0)" })
@@ -116,6 +117,14 @@ private struct CameraInfoSection: View {
             }
         }
         #endif
+    }
+
+    private var connectionName: String {
+        switch model.library.source?.kind {
+        case .usb: "USB 記憶卡"
+        case .usbCamera: "USB 相機（MTP）"
+        default: "Wi-Fi"
+        }
     }
 
     private func bytes(_ n: Int64) -> String { n.formatted(.byteCount(style: .file)) }

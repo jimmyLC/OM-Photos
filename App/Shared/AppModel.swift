@@ -6,6 +6,8 @@ import OMKit
 enum SourceID: Hashable {
     case wifi
     case volume(URL)
+    /// The camera on a USB cable (MTP), found automatically.
+    case usbCamera
 }
 
 /// Sidebar rows (one selection, like the Photos sidebar).
@@ -24,6 +26,7 @@ final class AppModel {
     /// Camera cards available over USB (camera in "Storage" mode).
     private(set) var volumes: [URL] = []
     var selectedSource: SourceID = .wifi
+    let usb = USBCameraMonitor()
     /// Day the grid should scroll to (set from the sidebar or the date menu).
     var scrollTarget: Date?
     /// Item open in the full-screen viewer.
@@ -239,6 +242,7 @@ final class AppModel {
         switch selectedSource {
         case .wifi: connection.displayName
         case .volume(let url): VolumeSource(root: url).displayName
+        case .usbCamera: usb.source?.name ?? "USB 相機"
         }
     }
 
@@ -254,6 +258,8 @@ final class AppModel {
             }
         case .volume(let url):
             await library.setSource(VolumeSource(root: url))
+        case .usbCamera:
+            await library.setSource(usb.source)
         }
     }
 
@@ -265,8 +271,20 @@ final class AppModel {
 
     /// True when a USB card is the source, so Wi-Fi pairing and connecting are not needed.
     var usingUSB: Bool {
-        if case .volume = selectedSource { return true }
-        return false
+        switch selectedSource {
+        case .volume, .usbCamera: true
+        case .wifi: false
+        }
+    }
+
+    /// A camera was plugged in or unplugged.
+    func usbCameraChanged() async {
+        if usb.source != nil {
+            // Same rule as a card: show it, unless the Wi-Fi library is in use.
+            if !(selectedSource == .wifi && connection.isConnected) { await select(.usbCamera) }
+        } else if selectedSource == .usbCamera {
+            await select(volumes.first.map { SourceID.volume($0) } ?? .wifi)
+        }
     }
 
     func select(_ source: SourceID) async {

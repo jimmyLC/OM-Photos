@@ -13,6 +13,8 @@ public struct CameraDetails: Equatable, Sendable {
     /// The camera reports at most 4 GiB - 1 of free space over Wi-Fi.
     public var freeSpaceIsCapped = false
     public var capacity: Int64?
+    /// Percent; only reported to a Mac over a USB cable.
+    public var battery: Int?
 
     public init() {}
 

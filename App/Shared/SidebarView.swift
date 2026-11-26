@@ -20,6 +20,11 @@ struct SidebarView: View {
                 }
                 .tag(SidebarItem.source(.wifi))
 
+                if let camera = model.usb.source {
+                    Label(camera.name, systemImage: "cable.connector")
+                        .tag(SidebarItem.source(.usbCamera))
+                }
+
                 ForEach(model.volumes, id: \.self) { url in
                     Label(VolumeSource(root: url).displayName, systemImage: "sdcard")
                         .tag(SidebarItem.source(.volume(url)))
@@ -124,6 +129,13 @@ struct FilterMenu: View {
                         Task { await model.select(.wifi) }
                     } label: {
                         Label(connection.displayName, systemImage: model.selectedSource == .wifi ? "checkmark" : "wifi")
+                    }
+                    if let camera = model.usb.source {
+                        Button {
+                            Task { await model.select(.usbCamera) }
+                        } label: {
+                            Label(camera.name, systemImage: model.selectedSource == .usbCamera ? "checkmark" : "cable.connector")
+                        }
                     }
                     ForEach(model.volumes, id: \.self) { url in
                         Button {

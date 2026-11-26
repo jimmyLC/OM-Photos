@@ -23,7 +23,7 @@ struct RootView: View {
     var body: some View {
         @Bindable var model = model
         Group {
-            if connection.cameras.isEmpty && model.volumes.isEmpty && !connection.isConnected {
+            if connection.cameras.isEmpty && model.volumes.isEmpty && model.usb.source == nil && !connection.isConnected {
                 NavigationStack {
                     WelcomeView(pair: { showPairing = true })
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -128,7 +128,7 @@ struct RootView: View {
             // First launch: go straight to the scanner, unless already on the camera Wi-Fi.
             guard connection.cameras.isEmpty, model.volumes.isEmpty else { return }
             await connection.connectIfReachable()
-            if !connection.isConnected, model.volumes.isEmpty { showPairing = true }
+            if !connection.isConnected, model.volumes.isEmpty, model.usb.source == nil { showPairing = true }
         }
         .task {
             if model.usingUSB {
@@ -136,6 +136,17 @@ struct RootView: View {
             } else {
                 await connection.connectIfReachable()
             }
+        }
+        .task { model.usb.start() }
+        .onChange(of: model.usb.source?.cacheKey) { _, key in
+            // A camera on a cable needs no pairing.
+            if key != nil, connection.cameras.isEmpty { showPairing = false }
+            Task { await model.usbCameraChanged() }
+        }
+        .alert("USB 相機", isPresented: .init(get: { model.usb.problem != nil }, set: { if !$0 { model.usb.problem = nil } })) {
+            Button("好") {}
+        } message: {
+            Text(model.usb.problem ?? "")
         }
         .onChange(of: model.requestPairing) { _, wanted in
             // From the settings sheet it opens once that sheet has closed.
@@ -410,6 +421,10 @@ struct WelcomeView: View {
             Button("改用 USB 記憶卡", systemImage: "cable.connector") { model.pickingVolume = true }
                 .buttonStyle(.glass)
             #endif
+            Text("也可以用 USB 線接相機（相機的 USB 模式選 MTP），OM Drop 會自動偵測。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .padding(32)
     }

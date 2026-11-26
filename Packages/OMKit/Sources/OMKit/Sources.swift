@@ -3,7 +3,8 @@ import Foundation
 import ImageIO
 
 public enum SourceKind: String, Sendable {
-    case wifi, usb
+    /// `usb`: the card mounted as a disk. `usbCamera`: the camera on a cable (MTP).
+    case wifi, usb, usbCamera
 }
 
 /// Where the photos come from: the camera over Wi-Fi, or its card over USB.
