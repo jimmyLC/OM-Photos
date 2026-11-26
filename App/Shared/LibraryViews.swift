@@ -117,7 +117,7 @@ struct PhotoGrid: View {
             library.clearSelection()
             return .handled
         }
-        .onKeyPress(.delete) {
+        .onKeyPress(keys: [.delete, .deleteForward, KeyEquivalent("\u{7F}")]) { _ in
             guard !library.selection.isEmpty else { return .ignored }
             model.askDeleteSelected()
             return .handled
@@ -173,6 +173,16 @@ struct PhotoCell: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { tap() }
+            .contextMenu {
+                Button("匯入", systemImage: "square.and.arrow.down") {
+                    selectForMenu()
+                    model.askImportSelected()
+                }
+                Button("從相機刪除…", systemImage: "trash", role: .destructive) {
+                    selectForMenu()
+                    model.askDeleteSelected()
+                }
+            }
             .accessibilityLabel("\(item.badge)，\(item.date.formatted(date: .abbreviated, time: .shortened))")
             .accessibilityAddTraits(selected ? .isSelected : [])
             .task(id: item.id) { await model.library.loadMovieInfo(for: item) }
@@ -207,10 +217,17 @@ struct PhotoCell: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, Color.accentColor)
+                    .foregroundStyle(.background, .tint)
             }
         }
         .padding(5)
+    }
+
+    /// Right-click acts on the selection; on an unselected item it acts on that item only.
+    private func selectForMenu() {
+        if !model.library.selection.contains(item.id) {
+            model.library.select(item, extend: false, toggle: false)
+        }
     }
 
     private func tap() {
@@ -274,16 +291,16 @@ struct SummaryBar: View {
             switch importer.phase {
             case .running:
                 ImportProgressView()
-            case .finished(let summary):
+            case .finished(let summary) where library.selection.isEmpty && !library.isDeleting && model.deleteMessage == nil:
                 ImportResultView(summary: summary)
-            case .idle where library.isDeleting:
+            case _ where library.isDeleting:
                 HStack(spacing: 10) {
                     ProgressView().controlSize(.small)
                     Text("正在從相機刪除…")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-            case .idle where model.deleteMessage != nil:
+            case _ where model.deleteMessage != nil:
                 HStack(spacing: 10) {
                     Image(systemName: "trash").foregroundStyle(.secondary)
                     Text(model.deleteMessage ?? "")
@@ -297,7 +314,7 @@ struct SummaryBar: View {
                     try? await Task.sleep(for: .seconds(6))
                     model.deleteMessage = nil
                 }
-            case .idle:
+            default:
                 HStack(spacing: 12) {
                     if library.selection.isEmpty {
                         Text("\(library.filtered.count) 個項目")
