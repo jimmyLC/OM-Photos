@@ -87,6 +87,25 @@ struct RootView: View {
         } message: {
             Text(volumeError ?? "")
         }
+        .confirmationDialog(model.pendingImport?.title ?? "", isPresented: .init(
+            get: { model.pendingImport != nil }, set: { if !$0 { model.pendingImport = nil } }
+        ), titleVisibility: .visible, presenting: model.pendingImport) { pending in
+            Button("開始匯入") { model.confirmImport(pending) }
+            Button("取消", role: .cancel) {}
+        } message: { pending in
+            Text(importMessage(pending))
+        }
+        .alert("無法匯入", isPresented: .init(get: { model.importError != nil }, set: { if !$0 { model.importError = nil } })) {
+            Button("好") {}
+        } message: {
+            Text(model.importError ?? "")
+        }
+        .onChange(of: model.importer.phase) { _, phase in
+            if case .finished(let summary) = phase { Task { await model.afterImport(summary) } }
+        }
+        .onChange(of: model.library.phase) { _, phase in
+            if phase == .loaded { model.autoImportIfWanted() }
+        }
         .onAppear {
             // First launch: go straight to the scanner.
             if connection.cameras.isEmpty && model.volumes.isEmpty { showPairing = true }
@@ -106,6 +125,16 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    private func importMessage(_ p: AppModel.PendingImport) -> String {
+        let time = Duration.seconds(max(p.seconds, 1))
+            .formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide, maximumUnitCount: 2))
+        var text = "\(p.items.count) 項，共 \(p.bytes.formatted(.byteCount(style: .file)))，預估約 \(time)。\n存到\(p.destination)。"
+        if model.selectedSource == .wifi, p.seconds > 120 {
+            text += "\n\nWi-Fi 較慢，大量檔案或影片建議用 USB 線（快 10 倍以上）。"
+        }
+        return text
     }
 
     // MARK: Toolbars
@@ -142,6 +171,7 @@ struct RootView: View {
             Menu {
                 if model.selectedSource == .wifi, connection.isConnected {
                     Button("中斷連線", systemImage: "wifi.slash") { Task { await connection.disconnect() } }
+                        .disabled(model.importer.isRunning)
                 }
                 Button("配對新相機", systemImage: "qrcode.viewfinder") { showPairing = true }
                 #if os(iOS)

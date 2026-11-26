@@ -17,8 +17,9 @@ public final class LibraryModel {
     public var typeFilter: TypeFilter = .all
     public var statusFilter: StatusFilter = .all
     public var selection: Set<MediaItem.ID> = []
-    /// IDs of items already imported on this device (filled in stage 3).
+    /// IDs of items already imported on this device.
     public var importedIDs: Set<MediaItem.ID> = []
+    public var ledger: ImportLedger?
 
     public let images: ImageStore
     private var loadID = 0
@@ -71,6 +72,7 @@ public final class LibraryModel {
             let files = try await source.listFiles()
             guard mine == loadID, source.cacheKey == self.source?.cacheKey else { return }
             items = MediaItem.group(files)
+            importedIDs = ledger?.importedIDs(in: items) ?? []
             selection.formIntersection(Set(items.map(\.id)))
             phase = .loaded
         } catch {

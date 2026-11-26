@@ -17,6 +17,12 @@ public protocol CameraSource: Sendable {
     /// Large image for the viewer (encoded image data).
     func preview(for file: MediaFile) async throws -> Data
     func movieInfo(for file: MediaFile) async throws -> MovieInfo
+    /// Copy the original file to `destination`; returns the number of bytes written.
+    func download(_ file: MediaFile, to destination: URL, progress: @escaping @Sendable (Int64) -> Void) async throws -> Int64
+    /// Called once before an import (e.g. keep the camera awake).
+    func prepareForImport() async
+    /// Starting guess for the time estimate, in bytes per second.
+    var typicalSpeed: Double { get }
 }
 
 // MARK: - Wi-Fi
@@ -55,6 +61,18 @@ public struct WiFiSource: CameraSource {
         let xml = try await client.text("get_movfileinfo.cgi", query: ["DIR": file.path])
         return MovieInfo(duration: XML.value("playtime", in: xml).flatMap(TimeInterval.init),
                          resolution: XML.value("moviesize", in: xml))
+    }
+
+    public var typicalSpeed: Double { 3_000_000 }  // measured 3.1 MB/s on an OM-3
+
+    public func prepareForImport() async {
+        try? await client.switchMode(.play)
+        try? await client.setTimeout(seconds: 1800)  // untested on the OM-3; harmless if refused
+    }
+
+    public func download(_ file: MediaFile, to destination: URL,
+                         progress: @escaping @Sendable (Int64) -> Void) async throws -> Int64 {
+        try await client.download(file.path, to: destination, progress: progress)
     }
 
     private func list(_ dir: String) async throws -> [ListEntry] {
@@ -166,6 +184,33 @@ public struct VolumeSource: CameraSource {
             resolution = "\(Int(abs(size.width)))x\(Int(abs(size.height)))"
         }
         return MovieInfo(duration: duration, resolution: resolution)
+    }
+
+    public var typicalSpeed: Double { 40_000_000 }  // measured 44.6 MB/s in Storage mode
+
+    public func prepareForImport() async {}
+
+    public func download(_ file: MediaFile, to destination: URL,
+                         progress: @escaping @Sendable (Int64) -> Void) async throws -> Int64 {
+        let source = url(for: file)
+        return try await Task.detached(priority: .userInitiated) {
+            guard let input = FileHandle(forReadingAtPath: source.path) else {
+                throw CameraError.unreachable("讀不到 \(file.name)，記憶卡是否已拔除？")
+            }
+            defer { try? input.close() }
+            _ = fcntl(input.fileDescriptor, F_NOCACHE, 1)
+            FileManager.default.createFile(atPath: destination.path, contents: nil)
+            let output = try FileHandle(forWritingTo: destination)
+            defer { try? output.close() }
+            var copied: Int64 = 0
+            while let chunk = try input.read(upToCount: 4 * 1024 * 1024), !chunk.isEmpty {
+                try Task.checkCancellation()
+                try output.write(contentsOf: chunk)
+                copied += Int64(chunk.count)
+                progress(copied)
+            }
+            return copied
+        }.value
     }
 
     private func image(for file: MediaFile, maxPixels: Int) async throws -> Data {

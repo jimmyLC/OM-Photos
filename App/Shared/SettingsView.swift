@@ -27,6 +27,8 @@ struct SettingsView: View {
                 Text("相機的 Wi-Fi 密碼存在鑰匙圈，並透過 iCloud 鑰匙圈同步到你的其他裝置。")
             }
 
+            ImportSettingsSection()
+
             Section {
                 Toggle("匯入完成後自動中斷並切回原本的 Wi-Fi", isOn: $autoDisconnect)
                 if !connection.switchesWiFiAutomatically {
@@ -59,6 +61,62 @@ struct SettingsView: View {
         } message: {
             Text("所有裝置上都會移除這台相機的配對資料，之後要重新掃描 QR code。相機裡的照片不受影響。")
         }
+    }
+}
+
+private struct ImportSettingsSection: View {
+    @AppStorage(SettingKey.autoImport) private var autoImport = false
+    @State private var kind = ImportSettings.kind
+    @State private var folderName = ImportSettings.folder?.path
+    @State private var picking = false
+
+    var body: some View {
+        Section {
+            Picker("匯入到", selection: $kind) {
+                ForEach(ImportSettings.Kind.allCases) { Text($0.title).tag($0) }
+            }
+            .onChange(of: kind) { _, k in ImportSettings.kind = k }
+            if kind == .folder {
+                HStack {
+                    Text(folderName.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "尚未選擇")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("選擇…") { choose() }
+                }
+            }
+            Toggle("連上相機就自動匯入新項目", isOn: $autoImport)
+        } header: {
+            Text("匯入")
+        } footer: {
+            Text(kind == .folder ? "照片依拍攝日期放進子資料夾，例如 2026-11-26。" : "RAW+JPG 會存成同一張照片。")
+        }
+        #if os(iOS)
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.folder]) { result in
+            if case .success(let url) = result {
+                ImportSettings.setFolder(url)
+                folderName = url.path
+            }
+        }
+        #endif
+    }
+
+    private func choose() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "選擇"
+        panel.directoryURL = ImportSettings.folder
+        if panel.runModal() == .OK, let url = panel.url {
+            ImportSettings.setFolder(url)
+            folderName = url.path
+        }
+        #else
+        picking = true
+        #endif
     }
 }
 

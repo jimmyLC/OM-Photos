@@ -71,6 +71,33 @@ public actor CameraClient {
         _ = try await data("exec_pwoff.cgi", timeout: 5)
     }
 
+    /// Ask the camera to stay awake longer (seconds). Older firmware may not support
+    /// the value; failures are ignored by callers.
+    public func setTimeout(seconds: Int) async throws {
+        _ = try await data("set_timeout.cgi", query: ["timeoutsec": String(seconds)], timeout: 5)
+    }
+
+    /// Stream a file from the card to `destination`, reporting bytes received so far.
+    /// Waits for earlier commands, like every other request.
+    public func download(_ path: String, to destination: URL,
+                         progress: @escaping @Sendable (Int64) -> Void) async throws -> Int64 {
+        let request = makeRequest(path, query: [:], timeout: 60)
+        let previous = tail
+        let configuration = session.configuration
+        let job = Task { () throws -> Int64 in
+            await previous?.value
+            try Task.checkCancellation()
+            return try await StreamDownload(request: request, configuration: configuration,
+                                            destination: destination, progress: progress).run()
+        }
+        tail = Task { _ = try? await job.value }
+        return try await withTaskCancellationHandler {
+            try await job.value
+        } onCancel: {
+            job.cancel()
+        }
+    }
+
     // MARK: Transport
 
     public func text(_ cgi: String, query: [String: String] = [:], timeout: TimeInterval = 10) async throws -> String {

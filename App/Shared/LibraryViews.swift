@@ -149,6 +149,17 @@ struct PhotoCell: View {
         Thumbnail(item: item)
             .overlay(alignment: .bottomLeading) { badges }
             .overlay(alignment: .topTrailing) { marks }
+            .overlay(alignment: .topLeading) {
+                if model.library.importedIDs.contains(item.id) {
+                    Label("已匯入", systemImage: "arrow.down.circle.fill")
+                        .labelStyle(.iconOnly)
+                        .font(.callout)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .green)
+                        .shadow(radius: 2)
+                        .padding(5)
+                }
+            }
             .overlay {
                 if selected {
                     Rectangle().strokeBorder(Color.accentColor, lineWidth: 3)
@@ -247,26 +258,151 @@ struct Thumbnail: View {
     }
 }
 
-/// Bottom bar: item count, or the selection and its size.
+/// Bottom bar: counts and import buttons, the import progress, or the result.
 struct SummaryBar: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         let library = model.library
-        HStack(spacing: 10) {
-            if library.selection.isEmpty {
-                Text("\(library.filtered.count) 個項目")
-            } else {
-                Text("已選 \(library.selectedItems.count) 項 · \(library.selectedSize.formatted(.byteCount(style: .file)))")
-                Button("取消選取") { library.clearSelection() }
-                    .buttonStyle(.borderless)
+        let importer = model.importer
+        Group {
+            switch importer.phase {
+            case .running:
+                ImportProgressView()
+            case .finished(let summary):
+                ImportResultView(summary: summary)
+            case .idle:
+                HStack(spacing: 12) {
+                    if library.selection.isEmpty {
+                        Text("\(library.filtered.count) 個項目")
+                            .foregroundStyle(.secondary)
+                        if model.newItemCount > 0 {
+                            Button {
+                                model.askImportNew()
+                            } label: {
+                                Label("匯入所有新項目（\(model.newItemCount)）", systemImage: "square.and.arrow.down")
+                            }
+                            .buttonStyle(.glassProminent)
+                        } else if !library.items.isEmpty {
+                            Label("全部已匯入", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        }
+                    } else {
+                        Text("已選 \(library.selectedItems.count) 項 · \(library.selectedSize.formatted(.byteCount(style: .file)))")
+                        Button("取消選取") { library.clearSelection() }
+                            .buttonStyle(.borderless)
+                        Button {
+                            model.askImportSelected()
+                        } label: {
+                            Label("匯入", systemImage: "square.and.arrow.down")
+                        }
+                        .buttonStyle(.glassProminent)
+                    }
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 6)
+                .padding(.vertical, 6)
             }
         }
         .font(.callout)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
         .glassEffect(in: Capsule())
+        .padding(.horizontal)
         .padding(.bottom, 10)
         .animation(.smooth, value: library.selection.count)
+        .animation(.smooth, value: importer.phase)
+    }
+}
+
+struct ImportProgressView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let importer = model.importer
+        HStack(spacing: 12) {
+            ProgressView(value: importer.fraction)
+                .progressViewStyle(.circular)
+                .controlSize(.small)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("正在匯入 \(min(importer.doneItems + 1, importer.totalItems)) / \(importer.totalItems)")
+                    .font(.callout.weight(.medium))
+                Text(detail(importer))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .frame(minWidth: 200, alignment: .leading)
+            Button("取消", role: .cancel) { importer.cancel() }
+                .buttonStyle(.glass)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    private func detail(_ importer: Importer) -> String {
+        var parts = [importer.currentName]
+        parts.append("\(Int(importer.fraction * 100))%")
+        if let remaining = importer.remaining {
+            parts.append("剩約 " + Duration.seconds(max(remaining, 1)).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .narrow, maximumUnitCount: 2)))
+        }
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}
+
+struct ImportResultView: View {
+    @Environment(AppModel.self) private var model
+    let summary: ImportSummary
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(color)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout.weight(.medium))
+                if let detail {
+                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+            if summary.imported > 0 {
+                Button("顯示") { ImportSettings.reveal(summary.location) }
+                    .buttonStyle(.glass)
+            }
+            if !model.importer.failedItems.isEmpty {
+                Button("重試") { model.retryFailed() }
+                    .buttonStyle(.glassProminent)
+            }
+            Button {
+                model.importer.dismissSummary()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("關閉")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    private var icon: String {
+        if summary.error != nil || !summary.failed.isEmpty { return "exclamationmark.triangle.fill" }
+        return summary.cancelled ? "stop.circle" : "checkmark.circle.fill"
+    }
+
+    private var color: Color {
+        if summary.error != nil || !summary.failed.isEmpty { return .orange }
+        return summary.cancelled ? .secondary : .green
+    }
+
+    private var title: String {
+        if summary.cancelled { return "已取消，匯入了 \(summary.imported) 項" }
+        if summary.imported == 0, let error = summary.error { return error }
+        if summary.failed.isEmpty { return "已匯入 \(summary.imported) 項" }
+        return "已匯入 \(summary.imported) 項，\(summary.failed.count) 項失敗"
+    }
+
+    private var detail: String? {
+        if !summary.failed.isEmpty {
+            return "失敗：" + summary.failed.prefix(4).joined(separator: "、") + (summary.failed.count > 4 ? "…" : "")
+        }
+        guard summary.imported > 0 else { return nil }
+        let speed = summary.seconds > 0 ? Double(summary.bytes) / summary.seconds : 0
+        return "\(summary.bytes.formatted(.byteCount(style: .file))) · 平均 \(Int64(speed).formatted(.byteCount(style: .file)))/秒"
     }
 }

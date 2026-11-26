@@ -33,9 +33,88 @@ final class AppModel {
     /// iPhone/iPad: show the Files picker to choose the USB card.
     var pickingVolume = false
 
+    let importer: Importer
+    /// Import waiting for the user's OK (shows count, size and time first).
+    var pendingImport: PendingImport?
+    /// Source cache key that was auto-imported already (once per load).
+    private var autoImportedSource: String?
+
+    struct PendingImport: Identifiable {
+        let id = UUID()
+        let items: [MediaItem]
+        let title: String
+        let bytes: Int64
+        let seconds: TimeInterval
+        let destination: String
+    }
+
     init(connection: ConnectionManager) {
         self.connection = connection
         connection.powerOffWhenDone = UserDefaults.standard.object(forKey: SettingKey.powerOffWhenDone) as? Bool ?? true
+        let ledger = ImportLedger()
+        importer = Importer(ledger: ledger)
+        library.ledger = ledger
+        importer.onItemImported = { [weak self] item in self?.library.importedIDs.insert(item.id) }
+        importer.onRunningChange = { running in KeepAwake.set(running) }
+    }
+
+    // MARK: Import
+
+    var newItemCount: Int { library.items.count - library.importedIDs.count }
+
+    func askImportNew() {
+        prepare(importer.newItems(library.items), title: "匯入所有新項目")
+    }
+
+    func askImportSelected() {
+        prepare(library.selectedItems, title: "匯入選取的項目")
+    }
+
+    func retryFailed() {
+        let items = importer.failedItems
+        importer.dismissSummary()
+        prepare(items, title: "重試失敗的項目")
+    }
+
+    private func prepare(_ items: [MediaItem], title: String) {
+        guard let source = library.source, !items.isEmpty, !importer.isRunning else { return }
+        let estimate = Importer.estimate(items, source: source)
+        pendingImport = PendingImport(items: items, title: title, bytes: estimate.bytes,
+                                      seconds: estimate.seconds, destination: ImportSettings.destinationTitle)
+    }
+
+    func confirmImport(_ pending: PendingImport) {
+        pendingImport = nil
+        guard let source = library.source else { return }
+        do {
+            importer.start(pending.items, from: source, to: try ImportSettings.destination())
+        } catch {
+            importError = error.localizedDescription
+        }
+    }
+
+    var importError: String?
+
+    /// After the list loads: import new items automatically if the user turned that on.
+    func autoImportIfWanted() {
+        guard UserDefaults.standard.bool(forKey: SettingKey.autoImport), library.phase == .loaded,
+              let source = library.source, autoImportedSource != source.cacheKey, !importer.isRunning else { return }
+        autoImportedSource = source.cacheKey
+        let items = importer.newItems(library.items)
+        guard !items.isEmpty else { return }
+        do {
+            importer.start(items, from: source, to: try ImportSettings.destination())
+        } catch {
+            importError = error.localizedDescription
+        }
+    }
+
+    /// After an import over Wi-Fi: switch back to the normal network if the user wants that.
+    func afterImport(_ summary: ImportSummary) async {
+        let wanted = UserDefaults.standard.object(forKey: SettingKey.autoDisconnect) as? Bool ?? true
+        guard wanted, selectedSource == .wifi, connection.isConnected, summary.imported > 0,
+              summary.failed.isEmpty, !summary.cancelled, summary.error == nil else { return }
+        await connection.disconnect()
     }
 
     var sourceTitle: String {
@@ -103,4 +182,8 @@ enum SettingKey {
     static let autoDisconnect = "autoDisconnectAfterImport"
     static let powerOffWhenDone = "powerOffWhenDone"
     static let thumbnailSize = "thumbnailSize"
+    static let autoImport = "autoImportOnConnect"
+    static let destinationKind = "destinationKind"
+    static let destinationFolderPath = "destinationFolderPath"
+    static let destinationFolderBookmark = "destinationFolderBookmark"
 }

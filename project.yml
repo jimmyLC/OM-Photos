@@ -19,6 +19,7 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: OM Transfer
     INFOPLIST_KEY_NSCameraUsageDescription: 用鏡頭掃描相機螢幕上的 QR code，完成配對。
+    INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 把從相機匯入的照片和影片加入照片圖庫。
     INFOPLIST_KEY_NSHumanReadableCopyright: 'Copyright © 2026 JimmyLC'
 
 targets:
