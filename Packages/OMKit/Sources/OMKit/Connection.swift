@@ -9,6 +9,12 @@ public protocol WiFiJoining: Sendable {
     func join(_ credentials: CameraCredentials) async throws
     /// Leave the camera network and go back to the network used before.
     func leave(_ credentials: CameraCredentials) async -> LeaveResult
+    /// True when the user has to switch networks in Settings.
+    var isManual: Bool { get }
+}
+
+public extension WiFiJoining {
+    var isManual: Bool { false }
 }
 
 /// Thrown by a joiner that cannot switch networks itself (iOS without the Hotspot
@@ -194,6 +200,21 @@ public final class ConnectionManager {
         case .failed(let why): notice = "切回原本網路失敗：\(why)"
         }
     }
+
+    /// Connect silently when the device is already on the camera Wi-Fi
+    /// (e.g. the user just switched in Settings and came back). Never switches networks.
+    public func connectIfReachable() async {
+        guard !cameras.isEmpty, !isConnected, !state.isBusy else { return }
+        guard let info = await probe(timeout: 1.5), !isConnected, !state.isBusy else { return }
+        attempt += 1
+        current = current ?? cameras.first
+        joinedByApp = false
+        joinedByUser = joiner.isManual
+        notice = nil
+        state = .connected(info)
+    }
+
+    public var switchesWiFiAutomatically: Bool { !joiner.isManual }
 
     /// Stop waiting for the camera (manual join or a slow automatic join).
     public func cancel() async {

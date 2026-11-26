@@ -17,6 +17,8 @@ enum PlatformJoiner {
 
 /// The user joins the camera Wi-Fi in Settings; the app waits for the camera.
 struct ManualJoiner: WiFiJoining {
+    var isManual: Bool { true }
+
     func join(_ credentials: CameraCredentials) async throws {
         throw ManualJoinRequired()
     }

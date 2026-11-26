@@ -77,10 +77,16 @@ public actor CameraClient {
         let session = session
         let job = Task { () throws -> Data in
             await previous?.value
+            // A thumbnail that scrolled off screen is skipped instead of downloaded.
+            try Task.checkCancellation()
             return try await Self.perform(request, session: session)
         }
         tail = Task { _ = try? await job.value }
-        return try await job.value
+        return try await withTaskCancellationHandler {
+            try await job.value
+        } onCancel: {
+            job.cancel()
+        }
     }
 
     nonisolated func makeRequest(_ path: String, query: [String: String], timeout: TimeInterval) -> URLRequest {

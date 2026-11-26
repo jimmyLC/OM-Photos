@@ -55,8 +55,21 @@ struct RootView: View {
             .environment(connection)
         }
         #endif
+        .onAppear {
+            // First launch: go straight to the scanner.
+            if connection.cameras.isEmpty { showPairing = true }
+        }
+        .task { await connection.connectIfReachable() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await connection.refresh() } }
+            guard phase == .active else { return }
+            Task {
+                if connection.isConnected {
+                    await connection.refresh()
+                } else {
+                    // Back from Settings after joining the camera Wi-Fi: connect by itself.
+                    await connection.connectIfReachable()
+                }
+            }
         }
     }
 }
@@ -68,6 +81,21 @@ enum Clipboard {
         NSPasteboard.general.setString(text, forType: .string)
         #else
         UIPasteboard.general.string = text
+        #endif
+    }
+}
+
+enum WiFiSettings {
+    /// Opens the Wi-Fi page of Settings. `App-Prefs:` is not public API (fine for a
+    /// personal build); if iOS refuses it, fall back to the app's own Settings page.
+    static func open() {
+        #if os(iOS)
+        let candidates = ["App-Prefs:WIFI", "App-Prefs:root=WIFI", UIApplication.openSettingsURLString]
+        func attempt(_ i: Int) {
+            guard i < candidates.count, let url = URL(string: candidates[i]) else { return }
+            UIApplication.shared.open(url) { ok in if !ok { attempt(i + 1) } }
+        }
+        attempt(0)
         #endif
     }
 }
@@ -128,7 +156,6 @@ struct WelcomeView: View {
 
 struct ConnectionPanel: View {
     @Environment(ConnectionManager.self) private var connection
-    @State private var copied = false
 
     var body: some View {
         VStack(spacing: 22) {
@@ -190,7 +217,7 @@ struct ConnectionPanel: View {
         switch connection.state {
         case .idle: "相機：選單 › 裝置連線，再按「連線」。"
         case .joiningWiFi(let ssid): ssid
-        case .waitingForUser(let c): "到 設定 › Wi-Fi 選擇「\(c.ssid)」，密碼已可複製。切好後回到 OM Transfer，會自動連上。"
+        case .waitingForUser(let c): "密碼已複製。到 Wi-Fi 設定選擇「\(c.ssid)」，第一次貼上密碼（之後 iPhone 會記住）。回到 OM Transfer 就會自動連上。"
         case .connected(let info): freeSpaceText(info).map { "記憶卡剩餘 \($0)" }
         case .failed(let why): why
         default: nil
@@ -211,13 +238,17 @@ struct ConnectionPanel: View {
                         .buttonStyle(.glass)
                     Button {
                         Clipboard.copy(c.password)
-                        copied = true
+                        WiFiSettings.open()
                     } label: {
-                        Label(copied ? "已複製密碼" : "複製 Wi-Fi 密碼", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        Label("前往 Wi-Fi 設定", systemImage: "gear")
                     }
                     .buttonStyle(.glassProminent)
                 }
+                Button("再複製一次密碼") { Clipboard.copy(c.password) }
+                    .font(.footnote)
+                    .buttonStyle(.borderless)
             }
+            .onAppear { Clipboard.copy(c.password) }
         case .connecting, .joiningWiFi:
             VStack(spacing: 14) {
                 ProgressView()
