@@ -118,8 +118,9 @@ final class AppModel {
         pendingDelete = items
     }
 
-    func confirmDelete() async {
-        guard let items = pendingDelete else { return }
+    /// `items` comes from the alert itself: dismissing the alert clears `pendingDelete`
+    /// before the button action runs.
+    func confirmDelete(_ items: [MediaItem]) async {
         pendingDelete = nil
         let r = await library.delete(items)
         var parts: [String] = []

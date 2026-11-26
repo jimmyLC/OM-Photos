@@ -51,14 +51,13 @@ struct SettingsView: View {
         .navigationTitle("設定")
         .confirmationDialog("移除「\(confirmForget?.name ?? "")」？", isPresented: .init(
             get: { confirmForget != nil }, set: { if !$0 { confirmForget = nil } }
-        ), titleVisibility: .visible) {
+        ), titleVisibility: .visible, presenting: confirmForget) { camera in
             Button("移除", role: .destructive) {
-                guard let camera = confirmForget else { return }
                 Task {
                     do { try await connection.forget(camera) } catch { self.error = error.localizedDescription }
                 }
             }
-        } message: {
+        } message: { _ in
             Text("所有裝置上都會移除這台相機的配對資料，之後要重新掃描 QR code。相機裡的照片不受影響。")
         }
     }
