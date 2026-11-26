@@ -64,11 +64,16 @@ struct PhotoGrid: View {
     @AppStorage(SettingKey.thumbnailSize) private var cellSize: Double = PhotoGrid.defaultSize
     @State private var pinchBase: Double?
     @FocusState private var focused: Bool
+    #if os(iOS)
+    @State private var frames = CellFrames()
+    @State private var drag: (anchor: MediaItem.ID, base: Set<MediaItem.ID>, deselect: Bool)?
+    #endif
 
     #if os(macOS)
     static let defaultSize = 150.0
     #else
-    static let defaultSize = 110.0
+    /// Like Photos: about five across on iPhone, larger on iPad.
+    @MainActor static let defaultSize = UIDevice.current.userInterfaceIdiom == .pad ? 128.0 : 74.0
     #endif
     static let sizeRange = 70.0...320.0
 
@@ -83,12 +88,21 @@ struct PhotoGrid: View {
                             ForEach(section.items) { item in
                                 PhotoCell(item: item, selected: library.selection.contains(item.id))
                                     .id(item.id)
+                                    #if os(iOS)
+                                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { frames.map[item.id] = $0 }
+                                    .onDisappear { frames.map[item.id] = nil }
+                                    #endif
                             }
                         } header: {
                             DayHeader(section: section).id(section.day)
                         }
                     }
                 }
+                #if os(iOS)
+                .coordinateSpace(.named(Self.space))
+                // Hold and drag, or swipe sideways, to select many photos.
+                .gesture(SelectionDragGesture(onBegan: dragBegan, onMoved: dragMoved, onEnded: { drag = nil }))
+                #endif
                 .padding(.bottom, 60)
             }
             .onChange(of: model.scrollTarget) { _, day in
@@ -97,7 +111,18 @@ struct PhotoGrid: View {
                 model.scrollTarget = nil
             }
         }
-        .safeAreaInset(edge: .bottom) { SummaryBar() }
+        #if os(iOS)
+        .refreshable { await model.library.reload(quietly: true) }
+        #endif
+        .safeAreaInset(edge: .bottom) {
+            // While selecting on iPhone/iPad, the bottom toolbar takes over.
+            if !(model.selecting && !model.importer.isRunning && !library.isDeleting && model.deleteMessage == nil) {
+                SummaryBar()
+            }
+        }
+        #if os(iOS)
+        .sensoryFeedback(.selection, trigger: library.selection.count)
+        #endif
         .simultaneousGesture(
             MagnifyGesture()
                 .onChanged { value in
@@ -131,6 +156,27 @@ struct PhotoGrid: View {
             return .handled
         }
     }
+
+    #if os(iOS)
+    static let space = "photo-grid"
+
+    private func dragBegan(at point: CGPoint) {
+        guard let id = frames.item(at: point) else { return }
+        let library = model.library
+        if !model.selecting {
+            model.selecting = true
+            library.clearSelection()
+        }
+        let start = (anchor: id, base: library.selection, deselect: library.selection.contains(id))
+        drag = start
+        library.dragSelect(from: id, to: id, base: start.base, deselect: start.deselect)
+    }
+
+    private func dragMoved(to point: CGPoint) {
+        guard let drag, let id = frames.item(at: point) else { return }
+        model.library.dragSelect(from: drag.anchor, to: id, base: drag.base, deselect: drag.deselect)
+    }
+    #endif
 }
 
 struct DayHeader: View {
@@ -170,12 +216,26 @@ struct PhotoCell: View {
             }
             .overlay {
                 if selected {
-                    Rectangle().strokeBorder(Color.accentColor, lineWidth: 3)
-                    Color.accentColor.opacity(0.12)
+                    Color.white.opacity(0.28)
+                    #if os(macOS)
+                    Rectangle().strokeBorder(Color.blue, lineWidth: 3)
+                    #endif
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .blue)
+                        .background(Circle().fill(.white).padding(1))
+                        .shadow(radius: 2)
+                        .padding(5)
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture { tap() }
+            #if os(macOS)  // on iPhone and iPad a long press starts drag selection instead
             .contextMenu {
                 Button("匯入", systemImage: "square.and.arrow.down") {
                     selectForMenu()
@@ -186,6 +246,7 @@ struct PhotoCell: View {
                     model.askDeleteSelected()
                 }
             }
+            #endif
             .accessibilityLabel("\(item.badge)，\(item.date.formatted(date: .abbreviated, time: .shortened))")
             .accessibilityAddTraits(selected ? .isSelected : [])
             .task(id: item.id) { await model.library.loadMovieInfo(for: item) }
@@ -215,12 +276,6 @@ struct PhotoCell: View {
                     .foregroundStyle(.white)
                     .padding(4)
                     .background(.black.opacity(0.5), in: Circle())
-            }
-            if selected {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.background, .tint)
             }
         }
         .padding(5)

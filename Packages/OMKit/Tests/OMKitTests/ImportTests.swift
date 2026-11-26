@@ -27,6 +27,7 @@ class MemorySource: CameraSource, @unchecked Sendable {
     func preview(for file: MediaFile) async throws -> Data { Data() }
     func movieInfo(for file: MediaFile) async throws -> MovieInfo { MovieInfo(duration: nil, resolution: nil) }
     func prepareForImport() async {}
+    func details(files: [MediaFile]) async -> CameraDetails { CameraDetails() }
     var deleteFailures: Set<String> = []
     func delete(_ file: MediaFile) async throws {
         try lock.withLock {
@@ -256,5 +257,42 @@ extension SourceTests {
         let source = WiFiSource(client: CameraClient(session: FakeCard.session()), cameraID: "D", settle: .zero)
         try await source.delete(MediaFile(path: "/DCIM/100OMSYS/P1.JPG", size: 1, date: .now))
         #expect(FakeCard.hits.contains("/exec_erase.cgi?DIR=/DCIM/100OMSYS/P1.JPG"))
+    }
+}
+
+@MainActor @Suite(.serialized)
+struct DragSelectTests {
+    func library() async -> LibraryModel {
+        let source = MemorySource(Dictionary(uniqueKeysWithValues: (1...6).map { ("/D/P\($0).JPG", Data(count: 1)) }))
+        let library = LibraryModel(images: ImageStore(directory: nil))
+        await library.setSource(source)
+        return library
+    }
+
+    @Test func dragAddsRangeAndShrinksBack() async {
+        let l = await library()
+        let ids = l.filtered.map(\.id)
+        l.dragSelect(from: ids[1], to: ids[4], base: [ids[0]], deselect: false)
+        #expect(l.selection == Set(ids[0...4]))
+        l.dragSelect(from: ids[1], to: ids[2], base: [ids[0]], deselect: false)  // finger moved back
+        #expect(l.selection == Set(ids[0...2]))
+        l.dragSelect(from: ids[3], to: ids[1], base: [], deselect: false)  // backwards
+        #expect(l.selection == Set(ids[1...3]))
+    }
+
+    @Test func dragFromSelectedItemDeselects() async {
+        let l = await library()
+        let ids = l.filtered.map(\.id)
+        l.dragSelect(from: ids[1], to: ids[2], base: Set(ids), deselect: true)
+        #expect(l.selection == Set(ids).subtracting([ids[1], ids[2]]))
+    }
+
+    @Test func quietReloadKeepsListOnError() async {
+        let l = await library()
+        let source = l.source as! MemorySource
+        source.contents = [:]
+        await l.reload(quietly: true)
+        #expect(l.phase == .loaded)
+        #expect(l.items.isEmpty)
     }
 }

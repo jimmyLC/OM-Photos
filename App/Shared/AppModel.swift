@@ -72,13 +72,19 @@ final class AppModel {
         prepare(library.selectedItems, title: "匯入選取的項目")
     }
 
+    /// The photo open in the viewer. Saving to Photos starts right away; a folder
+    /// destination on the Mac still asks where to put it.
+    func importFromViewer(_ item: MediaItem) {
+        prepare([item], title: "匯入「\(item.primary.name)」", confirm: false)
+    }
+
     func retryFailed() {
         let items = importer.failedItems
         importer.dismissSummary()
         prepare(items, title: "重試失敗的項目")
     }
 
-    private func prepare(_ items: [MediaItem], title: String) {
+    private func prepare(_ items: [MediaItem], title: String, confirm: Bool = true) {
         guard let source = library.source, !items.isEmpty, !importer.isRunning else { return }
         let estimate = Importer.estimate(items, source: source)
         #if os(macOS)
@@ -91,13 +97,19 @@ final class AppModel {
             return
         }
         #endif
-        pendingImport = PendingImport(items: items, title: title, bytes: estimate.bytes,
-                                      seconds: estimate.seconds, destination: ImportSettings.destinationTitle)
+        let pending = PendingImport(items: items, title: title, bytes: estimate.bytes,
+                                    seconds: estimate.seconds, destination: ImportSettings.destinationTitle)
+        if confirm {
+            pendingImport = pending
+        } else {
+            confirmImport(pending)
+        }
     }
 
     func confirmImport(_ pending: PendingImport) {
         pendingImport = nil
         guard let source = library.source else { return }
+        if selecting { stopSelecting() }  // show the progress
         do {
             importer.start(pending.items, from: source, to: try ImportSettings.destination())
         } catch {
@@ -115,7 +127,10 @@ final class AppModel {
     var deleteMessage: String?
 
     func askDeleteSelected() {
-        let items = library.selectedItems
+        askDelete(library.selectedItems)
+    }
+
+    func askDelete(_ items: [MediaItem]) {
         guard !items.isEmpty, !importer.isRunning, !library.isDeleting else { return }
         pendingDelete = items
     }
@@ -124,9 +139,19 @@ final class AppModel {
     /// before the button action runs.
     func confirmDelete(_ items: [MediaItem]) async {
         pendingDelete = nil
+        // In the viewer, remember the neighbours so it can move on to the next photo.
+        let open = viewing
+        let order = library.filtered.map(\.id)
         let r = await library.delete(items)
+        if let open, viewing == open, !library.filtered.contains(where: { $0.id == open }),
+           let index = order.firstIndex(of: open) {
+            let remaining = Set(library.filtered.map(\.id))
+            viewing = order[(index + 1)...].first(where: remaining.contains)
+                ?? order[..<index].last(where: remaining.contains)
+        }
         var parts: [String] = []
         if r.deleted > 0 { parts.append("已從相機刪除 \(r.deleted) 項") }
+        if selecting, library.selection.isEmpty { selecting = false }
         if !r.failed.isEmpty { parts.append("\(r.failed.count) 項刪除失敗（\(r.failed.prefix(3).joined(separator: "、"))）") }
         if r.skippedProtected > 0 { parts.append("略過 \(r.skippedProtected) 項受保護的檔案") }
         deleteMessage = parts.isEmpty ? nil : parts.joined(separator: "，")
@@ -171,6 +196,45 @@ final class AppModel {
         await connection.disconnect()
     }
 
+    // MARK: Selection mode (iPhone/iPad)
+
+    func startSelecting() {
+        library.clearSelection()
+        selecting = true
+    }
+
+    func stopSelecting() {
+        selecting = false
+        library.clearSelection()
+    }
+
+    /// The photo grid (not a connection or welcome screen) is showing.
+    var showsLibrary: Bool {
+        library.phase == .loaded && (usingUSB || connection.isConnected)
+    }
+
+    /// iPhone/iPad large title.
+    var screenTitle: String {
+        showsLibrary ? "圖庫" : "OM Drop"
+    }
+
+    /// The centre of the selection bar, as in Photos.
+    var selectionTitle: String {
+        let items = library.selectedItems
+        if items.isEmpty { return "選取項目" }
+        return items.contains(where: \.isVideo) ? "已選取 \(items.count) 個項目" : "已選取 \(items.count) 張照片"
+    }
+
+    /// Under the title: source, active filters and the number of items.
+    var screenSubtitle: String {
+        guard showsLibrary else { return "" }
+        var parts = [sourceTitle]
+        if library.typeFilter != .all { parts.append(library.typeFilter.title) }
+        if library.statusFilter != .all { parts.append(library.statusFilter.title) }
+        parts.append("\(library.filtered.count) 項")
+        return parts.joined(separator: " · ")
+    }
+
     var sourceTitle: String {
         switch selectedSource {
         case .wifi: connection.displayName
@@ -206,6 +270,7 @@ final class AppModel {
     }
 
     func select(_ source: SourceID) async {
+        stopSelecting()
         selectedSource = source
         library.typeFilter = .all
         await syncSource()

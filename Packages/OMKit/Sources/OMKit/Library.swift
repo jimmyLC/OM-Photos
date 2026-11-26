@@ -60,14 +60,16 @@ public final class LibraryModel {
         await reload()
     }
 
-    public func reload() async {
+    /// `quietly` refreshes in the background: the current list (and the scroll
+    /// position) stays on screen, and an error leaves it as it is.
+    public func reload(quietly: Bool = false) async {
         guard let source else {
             phase = .noSource
             return
         }
         loadID += 1
         let mine = loadID
-        phase = .loading
+        if !quietly { phase = .loading }
         do {
             let files = try await source.listFiles()
             guard mine == loadID, source.cacheKey == self.source?.cacheKey else { return }
@@ -76,7 +78,7 @@ public final class LibraryModel {
             selection.formIntersection(Set(items.map(\.id)))
             phase = .loaded
         } catch {
-            guard mine == loadID else { return }
+            guard mine == loadID, !quietly else { return }
             phase = .failed((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
         }
     }
@@ -110,7 +112,7 @@ public final class LibraryModel {
 
     public private(set) var isDeleting = false
 
-    /// Delete whole items (RAW and JPG together) from the card, then reload the list.
+    /// Delete whole items (RAW and JPG together) from the card, then refresh the list.
     /// Protected items are skipped. Files are deleted one at a time.
     public func delete(_ targets: [MediaItem]) async -> DeleteResult {
         var result = DeleteResult()
@@ -132,12 +134,13 @@ public final class LibraryModel {
             }
             if ok {
                 result.deleted += 1
+                items.removeAll { $0.id == item.id }  // disappears right away
             } else {
                 result.failed.append(item.primary.name)
             }
         }
         selection.subtract(targets.map(\.id))
-        await reload()
+        await reload(quietly: true)
         return result
     }
 
@@ -155,6 +158,18 @@ public final class LibraryModel {
             selection = [item.id]
             anchorID = item.id
         }
+    }
+
+    /// Drag across the grid: everything between the first and the current item is
+    /// added to (or, if the drag started on a selected item, removed from) the
+    /// selection that existed when the drag began.
+    public func dragSelect(from anchor: MediaItem.ID, to current: MediaItem.ID,
+                           base: Set<MediaItem.ID>, deselect: Bool) {
+        let list = filtered
+        guard let a = list.firstIndex(where: { $0.id == anchor }),
+              let b = list.firstIndex(where: { $0.id == current }) else { return }
+        let range = list[min(a, b)...max(a, b)].map(\.id)
+        selection = deselect ? base.subtracting(range) : base.union(range)
     }
 
     public func selectAll() { selection = Set(filtered.map(\.id)) }

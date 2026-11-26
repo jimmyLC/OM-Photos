@@ -25,6 +25,8 @@ public protocol CameraSource: Sendable {
     var typicalSpeed: Double { get }
     /// Permanently delete a file from the card.
     func delete(_ file: MediaFile) async throws
+    /// Information about the camera and card; `files` is the current listing.
+    func details(files: [MediaFile]) async -> CameraDetails
 }
 
 // MARK: - Wi-Fi
@@ -84,6 +86,24 @@ public struct WiFiSource: CameraSource {
         if body.lowercased().contains("error") || body.lowercased().contains("fail") {
             throw CameraError.badResponse(XML.value("errorcode", in: body).map { "刪除失敗（代碼 \($0)）" } ?? "刪除失敗")
         }
+    }
+
+    public func details(files: [MediaFile]) async -> CameraDetails {
+        var d = CameraDetails()
+        if let xml = try? await client.text("get_caminfo.cgi") {
+            d.model = XML.value("model", in: xml)
+            d.serial = XML.value("Serial1", in: xml)
+        }
+        if let xml = try? await client.text("get_unusedcapacity.cgi"), let free = XML.value("unused", in: xml).flatMap(Int64.init) {
+            d.freeSpace = free
+            d.freeSpaceIsCapped = free == 4_294_967_295
+        }
+        d.fileCount = files.count
+        if let file = CameraDetails.exifCandidate(files),
+           let data = try? await client.data("get_exif.cgi", query: ["DIR": file.path], timeout: 15) {
+            d.readEXIF(CGImageSourceCreateWithData(data as CFData, nil))
+        }
+        return d
     }
 
     private func list(_ dir: String) async throws -> [ListEntry] {
@@ -229,6 +249,21 @@ public struct VolumeSource: CameraSource {
                 progress(copied)
             }
             return copied
+        }.value
+    }
+
+    public func details(files: [MediaFile]) async -> CameraDetails {
+        let root = root
+        let candidate = CameraDetails.exifCandidate(files).map { url(for: $0) }
+        return await Task.detached(priority: .userInitiated) {
+            var d = CameraDetails()
+            let keys: Set<URLResourceKey> = [.volumeTotalCapacityKey, .volumeAvailableCapacityKey]
+            let v = try? root.resourceValues(forKeys: keys)
+            d.capacity = v?.volumeTotalCapacity.map(Int64.init)
+            d.freeSpace = v?.volumeAvailableCapacity.map(Int64.init)
+            d.fileCount = files.count
+            if let candidate { d.readEXIF(CGImageSourceCreateWithURL(candidate as CFURL, nil)) }
+            return d
         }.value
     }
 

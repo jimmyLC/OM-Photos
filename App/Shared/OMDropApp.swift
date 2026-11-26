@@ -34,8 +34,9 @@ struct OMDropApp: App {
 
         Settings {
             SettingsView()
+                .environment(model)
                 .environment(model.connection)
-                .frame(width: 520, height: 420)
+                .frame(width: 520, height: 640)
         }
         #else
         WindowGroup {

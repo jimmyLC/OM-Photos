@@ -36,7 +36,13 @@ struct ViewerView: View {
         .onKeyPress(.escape) { close(); return .handled }
         .onKeyPress(.space) { close(); return .handled }
         .onKeyPress(characters: ["i"]) { _ in showInfo.toggle(); return .handled }
+        .onKeyPress(keys: [.delete, .deleteForward, KeyEquivalent("\u{7F}")]) { _ in
+            guard let item, !item.isProtected else { return .ignored }
+            model.askDelete([item])
+            return .handled
+        }
         .task(id: model.viewing) { await load() }
+        .environment(\.colorScheme, .dark)  // the viewer is always on black
         .transition(.opacity)
     }
 
@@ -88,9 +94,12 @@ struct ViewerView: View {
 
             if showInfo {
                 InfoPanel(item: item, info: model.library.movieInfo[item.id])
-                    .padding()
+                    .padding(.horizontal)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            ViewerActions(item: item)
+                .padding(.horizontal)
+                .padding(.bottom, 12)
         }
         .overlay {
             HStack {
@@ -164,6 +173,69 @@ struct ViewerView: View {
                 _ = await library.preview(for: items[i])
             }
         }
+    }
+}
+
+/// Import or delete the photo that is open, with progress and results.
+private struct ViewerActions: View {
+    @Environment(AppModel.self) private var model
+    let item: MediaItem
+
+    var body: some View {
+        let importer = model.importer
+        let imported = model.library.importedIDs.contains(item.id)
+        VStack(spacing: 10) {
+            if case .finished(let summary) = importer.phase {
+                ImportResultView(summary: summary)
+                    .glassEffect(in: Capsule())
+            }
+            if let message = model.deleteMessage {
+                Label(message, systemImage: "trash")
+                    .font(.callout)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .glassEffect(in: Capsule())
+                    .task(id: message) {
+                        try? await Task.sleep(for: .seconds(4))
+                        model.deleteMessage = nil
+                    }
+            }
+            if importer.isRunning {
+                ImportProgressView()
+                    .glassEffect(in: Capsule())
+            } else if model.library.isDeleting {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("正在從相機刪除…")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .glassEffect(in: Capsule())
+            } else {
+                HStack(spacing: 14) {
+                    Button(role: .destructive) {
+                        model.askDelete([item])
+                    } label: {
+                        Label(item.isProtected ? "受保護" : "刪除", systemImage: item.isProtected ? "lock.fill" : "trash")
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(item.isProtected)
+
+                    Button {
+                        model.importFromViewer(item)
+                    } label: {
+                        Label(imported ? "再次匯入" : "匯入", systemImage: imported ? "checkmark.circle" : "square.and.arrow.down")
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 4)
+                    }
+                    .brandProminent()
+                }
+                .controlSize(.large)
+            }
+        }
+        .foregroundStyle(.white)
     }
 }
 

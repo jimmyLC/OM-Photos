@@ -88,30 +88,16 @@ extension TypeFilter {
     }
 }
 
-/// iPhone: everything the sidebar offers, in one menu.
-struct CompactFilterMenu: View {
+/// iPhone/iPad filter button (as in Photos): type, status, date, and on iPhone the source.
+struct FilterMenu: View {
     @Environment(AppModel.self) private var model
     @Environment(ConnectionManager.self) private var connection
+    var includesSources = true
 
     var body: some View {
         @Bindable var library = model.library
+        let filtering = library.typeFilter != .all || library.statusFilter != .all
         Menu {
-            Section("來源") {
-                Button {
-                    Task { await model.select(.wifi) }
-                } label: {
-                    Label(connection.displayName, systemImage: model.selectedSource == .wifi ? "checkmark" : "wifi")
-                }
-                ForEach(model.volumes, id: \.self) { url in
-                    Button {
-                        Task { await model.select(.volume(url)) }
-                    } label: {
-                        Label(VolumeSource(root: url).displayName,
-                              systemImage: model.selectedSource == .volume(url) ? "checkmark" : "sdcard")
-                    }
-                }
-                Button("連接 USB 記憶卡…", systemImage: "cable.connector") { model.pickingVolume = true }
-            }
             if library.phase == .loaded {
                 Picker("類型", selection: $library.typeFilter) {
                     ForEach(TypeFilter.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
@@ -119,15 +105,42 @@ struct CompactFilterMenu: View {
                 Picker("狀態", selection: $library.statusFilter) {
                     ForEach(StatusFilter.allCases) { Text($0.title).tag($0) }
                 }
+                .pickerStyle(.menu)
                 Menu("跳到日期", systemImage: "calendar") {
                     ForEach(library.sections) { section in
                         Button("\(Days.title(section.day))（\(section.items.count)）") { model.scrollTarget = section.day }
                     }
                 }
+                if filtering {
+                    Button("清除篩選", systemImage: "xmark.circle") {
+                        library.typeFilter = .all
+                        library.statusFilter = .all
+                    }
+                }
+            }
+            if includesSources {
+                Section("來源") {
+                    Button {
+                        Task { await model.select(.wifi) }
+                    } label: {
+                        Label(connection.displayName, systemImage: model.selectedSource == .wifi ? "checkmark" : "wifi")
+                    }
+                    ForEach(model.volumes, id: \.self) { url in
+                        Button {
+                            Task { await model.select(.volume(url)) }
+                        } label: {
+                            Label(VolumeSource(root: url).displayName,
+                                  systemImage: model.selectedSource == .volume(url) ? "checkmark" : "sdcard")
+                        }
+                    }
+                    #if os(iOS)
+                    Button("連接 USB 記憶卡…", systemImage: "cable.connector") { model.pickingVolume = true }
+                    #endif
+                }
             }
         } label: {
-            Label("篩選", systemImage: library.typeFilter == .all && library.statusFilter == .all
-                  ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+            Label("篩選", systemImage: "line.3.horizontal.decrease")
         }
+        .tint(filtering ? .blue : nil)
     }
 }

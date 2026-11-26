@@ -28,25 +28,22 @@ struct RootView: View {
                     WelcomeView(pair: { showPairing = true })
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .navigationTitle("OM Drop")
-                        .toolbar { moreMenu }
+                        .toolbar {
+                            #if os(iOS)
+                            ToolbarItem(placement: .topBarLeading) { settingsButton }
+                            #else
+                            moreMenu
+                            #endif
+                        }
                 }
             } else if isCompact {
-                NavigationStack {
-                    DetailView()
-                        .navigationTitle(model.sourceTitle)
-                        #if os(iOS)
-                        .navigationBarTitleDisplayMode(.inline)
-                        #endif
-                        .toolbar { compactToolbar }
-                }
+                NavigationStack { libraryScreen }
             } else {
                 NavigationSplitView {
                     SidebarView()
                         .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
                 } detail: {
-                    DetailView()
-                        .navigationTitle(model.sourceTitle)
-                        .toolbar { regularToolbar }
+                    libraryScreen
                 }
             }
         }
@@ -66,11 +63,17 @@ struct RootView: View {
             .environment(connection)
         }
         #if os(iOS)
-        .sheet(isPresented: $showSettings) {
+        .sheet(isPresented: $showSettings, onDismiss: {
+            if model.requestPairing {
+                model.requestPairing = false
+                showPairing = true
+            }
+        }) {
             NavigationStack {
                 SettingsView()
                     .toolbar { Button("完成") { showSettings = false } }
             }
+            .environment(model)
             .environment(connection)
         }
         .fileImporter(isPresented: $model.pickingVolume, allowedContentTypes: [.folder]) { result in
@@ -87,9 +90,9 @@ struct RootView: View {
         } message: {
             Text(volumeError ?? "")
         }
-        .confirmationDialog(model.pendingImport?.title ?? "", isPresented: .init(
+        .alert(model.pendingImport?.title ?? "", isPresented: .init(
             get: { model.pendingImport != nil }, set: { if !$0 { model.pendingImport = nil } }
-        ), titleVisibility: .visible, presenting: model.pendingImport) { pending in
+        ), presenting: model.pendingImport) { pending in
             Button("開始匯入") { model.confirmImport(pending) }
             Button("取消", role: .cancel) {}
         } message: { pending in
@@ -115,6 +118,13 @@ struct RootView: View {
             if phase == .loaded { model.autoImportIfWanted() }
         }
         .task {
+            #if DEBUG && targetEnvironment(simulator)
+            if let path = UserDefaults.standard.string(forKey: "demoCardPath") {
+                _ = await model.addPickedVolume(URL(fileURLWithPath: path, isDirectory: true))
+                showPairing = false
+                return
+            }
+            #endif
             // First launch: go straight to the scanner, unless already on the camera Wi-Fi.
             guard connection.cameras.isEmpty, model.volumes.isEmpty else { return }
             await connection.connectIfReachable()
@@ -128,7 +138,8 @@ struct RootView: View {
             }
         }
         .onChange(of: model.requestPairing) { _, wanted in
-            if wanted { showPairing = true; model.requestPairing = false }
+            // From the settings sheet it opens once that sheet has closed.
+            if wanted, !showSettings { showPairing = true; model.requestPairing = false }
         }
         .onChange(of: model.volumes) { _, volumes in
             // A card was plugged in while the pairing sheet was up: USB does not need pairing.
@@ -160,19 +171,58 @@ struct RootView: View {
         return text
     }
 
+    // MARK: Library screen
+
+    private var libraryScreen: some View {
+        #if os(iOS)
+        DetailView()
+            .navigationTitle(model.screenTitle)
+            .navigationSubtitle(model.screenSubtitle)
+            .navigationBarTitleDisplayMode(model.showsLibrary ? .large : .inline)
+            .toolbar { photosToolbar }
+        #else
+        DetailView()
+            .navigationTitle(model.sourceTitle)
+            .toolbar { macToolbar }
+        #endif
+    }
+
     // MARK: Toolbars
 
-    @ToolbarContentBuilder private var regularToolbar: some ToolbarContent {
+    #if os(iOS)
+    /// Laid out like Photos: settings on the left, filter and "選取" on the right.
+    /// While selecting, "✕" replaces "選取" and the actions sit in the bottom bar.
+    @ToolbarContentBuilder private var photosToolbar: some ToolbarContent {
+        if model.selecting {
+            ToolbarItem(placement: .topBarTrailing) { FilterMenu(includesSources: isCompact) }
+            ToolbarItem(placement: .topBarTrailing) { SelectionMenu() }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .close) { model.stopSelecting() }
+                    .accessibilityLabel("結束選取")
+            }
+            SelectionToolbar()
+        } else {
+            ToolbarItem(placement: .topBarLeading) { settingsButton }
+            ToolbarItem(placement: .topBarTrailing) { FilterMenu(includesSources: isCompact) }
+            if model.library.phase == .loaded {
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                ToolbarItem(placement: .topBarTrailing) { SelectButton() }
+            }
+        }
+    }
+
+    private var settingsButton: some View {
+        Button("設定", systemImage: "gearshape") { showSettings = true }
+    }
+    #else
+    @ToolbarContentBuilder private var macToolbar: some ToolbarContent {
         if model.selectedSource == .wifi {
             ToolbarItem(placement: .principal) { StatusPill() }
         }
         if model.library.phase == .loaded {
             ToolbarItem(placement: .primaryAction) { StatusPicker() }
-            #if os(macOS)
             ToolbarItem(placement: .primaryAction) { ZoomSlider() }
-            #else
-            ToolbarItem(placement: .primaryAction) { SelectButton() }
-            #endif
             ToolbarItem(placement: .primaryAction) {
                 Button("重新整理", systemImage: "arrow.clockwise") { Task { await model.library.reload() } }
                     .keyboardShortcut("r")
@@ -180,31 +230,27 @@ struct RootView: View {
         }
         moreMenu
     }
-
-    @ToolbarContentBuilder private var compactToolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigation) { CompactFilterMenu() }
-        if model.library.phase == .loaded {
-            ToolbarItem(placement: .primaryAction) { SelectButton() }
-        }
-        moreMenu
-    }
+    #endif
 
     @ToolbarContentBuilder private var moreMenu: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                if model.selectedSource == .wifi, connection.isConnected {
-                    Button("中斷連線", systemImage: "wifi.slash") { Task { await connection.disconnect() } }
-                        .disabled(model.importer.isRunning)
-                }
-                Button("配對新相機", systemImage: "qrcode.viewfinder") { showPairing = true }
-                #if os(iOS)
-                Button("設定", systemImage: "gearshape") { showSettings = true }
-                #else
-                SettingsLink { Label("設定…", systemImage: "gearshape") }
-                #endif
-            } label: {
-                Label("更多", systemImage: "ellipsis")
+        ToolbarItem(placement: .primaryAction) { moreButton }
+    }
+
+    private var moreButton: some View {
+        Menu {
+            if model.library.phase == .loaded {
+                Button("重新整理", systemImage: "arrow.clockwise") { Task { await model.library.reload() } }
             }
+            if model.selectedSource == .wifi, connection.isConnected {
+                Button("中斷連線", systemImage: "wifi.slash") { Task { await connection.disconnect() } }
+                    .disabled(model.importer.isRunning)
+            }
+            Button("配對新相機", systemImage: "qrcode.viewfinder") { showPairing = true }
+            #if os(macOS)
+            SettingsLink { Label("設定…", systemImage: "gearshape") }
+            #endif
+        } label: {
+            Label("更多", systemImage: "ellipsis")
         }
     }
 }
@@ -221,15 +267,62 @@ struct StatusPicker: View {
     }
 }
 
+#if os(iOS)
+/// "選取" in the top right, as in Photos.
 struct SelectButton: View {
     @Environment(AppModel.self) private var model
     var body: some View {
-        Button(model.selecting ? "完成" : "選取") {
-            model.selecting.toggle()
-            if !model.selecting { model.library.clearSelection() }
+        Button("選取") { model.startSelecting() }
+    }
+}
+
+/// "⋯" while selecting.
+struct SelectionMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let library = model.library
+        let count = library.selectedItems.count
+        Menu {
+            Button("全選", systemImage: "checkmark.circle") { library.selectAll() }
+                .disabled(count == library.filtered.count)
+            Button("取消全選", systemImage: "circle") { library.clearSelection() }
+                .disabled(count == 0)
+        } label: {
+            Label("更多", systemImage: "ellipsis")
         }
     }
 }
+
+/// The selection bar, as in Photos: import on the left, the number selected in the
+/// middle, delete on the right.
+struct SelectionToolbar: ToolbarContent {
+    @Environment(AppModel.self) private var model
+
+    var body: some ToolbarContent {
+        let library = model.library
+        let count = library.selectedItems.count
+        let busy = model.importer.isRunning || library.isDeleting
+        ToolbarItem(placement: .bottomBar) {
+            Button("匯入", systemImage: "square.and.arrow.down") { model.askImportSelected() }
+                .disabled(count == 0 || busy)
+        }
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) {
+            Text(model.selectionTitle)
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 14)
+                .fixedSize()
+        }
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) {
+            Button("刪除", systemImage: "trash", role: .destructive) { model.askDeleteSelected() }
+                .tint(.red)
+                .disabled(count == 0 || busy)
+        }
+    }
+}
+#endif
 
 #if os(macOS)
 struct ZoomSlider: View {
@@ -275,6 +368,7 @@ enum WiFiSettings {
 // MARK: - First launch
 
 struct WelcomeView: View {
+    @Environment(AppModel.self) private var model
     let pair: () -> Void
 
     var body: some View {
@@ -312,6 +406,10 @@ struct WelcomeView: View {
             }
             .brandProminent()
             .controlSize(.large)
+            #if os(iOS)
+            Button("改用 USB 記憶卡", systemImage: "cable.connector") { model.pickingVolume = true }
+                .buttonStyle(.glass)
+            #endif
         }
         .padding(32)
     }

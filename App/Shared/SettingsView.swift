@@ -10,6 +10,8 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            CameraInfoSection()
+
             Section {
                 if connection.cameras.isEmpty {
                     Text("還沒有配對的相機").foregroundStyle(.secondary)
@@ -59,6 +61,70 @@ struct SettingsView: View {
             }
         } message: { _ in
             Text("所有裝置上都會移除這台相機的配對資料，之後要重新掃描 QR code。相機裡的照片不受影響。")
+        }
+    }
+}
+
+/// The camera or card in use, plus the connection actions on iPhone and iPad.
+private struct CameraInfoSection: View {
+    @Environment(AppModel.self) private var model
+    @Environment(ConnectionManager.self) private var connection
+    #if os(iOS)
+    @Environment(\.dismiss) private var dismiss
+    #endif
+    @State private var details: CameraDetails?
+
+    private var key: String {
+        let source = model.library.phase == .loaded ? model.library.source?.cacheKey ?? "" : ""
+        return source + "|\(model.library.items.count)"
+    }
+
+    var body: some View {
+        Section("相機資訊") {
+            if model.library.phase != .loaded || model.library.source == nil {
+                Text("連上相機或插入記憶卡後顯示").foregroundStyle(.secondary)
+            } else if let d = details {
+                row("型號", d.model)
+                row("序號", d.serial)
+                row("韌體版本", d.firmware)
+                row("鏡頭", d.lens)
+                row("連線方式", model.library.source?.kind == .usb ? "USB 記憶卡" : "Wi-Fi")
+                row("記憶卡剩餘", d.freeSpace.map { (d.freeSpaceIsCapped ? "超過 " : "") + bytes($0) })
+                row("記憶卡容量", d.capacity.map(bytes))
+                row("檔案數", d.fileCount.map { "\($0)" })
+            } else {
+                ProgressView()
+            }
+        }
+        .task(id: key) {
+            guard model.library.phase == .loaded, let source = model.library.source, !model.importer.isRunning else { return }
+            details = await source.details(files: model.library.items.flatMap(\.files))
+        }
+
+        #if os(iOS)
+        Section {
+            if model.selectedSource == .wifi, connection.isConnected {
+                Button("中斷連線", systemImage: "wifi.slash") {
+                    Task { await connection.disconnect() }
+                    dismiss()
+                }
+                .disabled(model.importer.isRunning)
+            }
+            Button("配對新相機", systemImage: "qrcode.viewfinder") {
+                model.requestPairing = true
+                dismiss()
+            }
+        }
+        #endif
+    }
+
+    private func bytes(_ n: Int64) -> String { n.formatted(.byteCount(style: .file)) }
+
+    @ViewBuilder private func row(_ title: String, _ value: String?) -> some View {
+        if let value {
+            LabeledContent(title) {
+                Text(value).textSelection(.enabled)
+            }
         }
     }
 }
