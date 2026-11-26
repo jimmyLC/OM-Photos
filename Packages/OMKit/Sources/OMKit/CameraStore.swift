@@ -39,7 +39,7 @@ public struct KeychainError: Error, LocalizedError, Equatable {
 /// camera paired on the iPhone also works on the Mac and iPad.
 /// One generic-password item per camera; the item data is the JSON of `PairedCamera`.
 public struct KeychainCameraStore: CameraStoring {
-    public static let defaultService = "com.jimmylc.OMTransfer.camera"
+    public static let defaultService = "com.jimmylc.OMDrop.camera"
     let service: String
 
     public init(service: String = KeychainCameraStore.defaultService) {
@@ -72,7 +72,7 @@ public struct KeychainCameraStore: CameraStoring {
         try delete(ssid: camera.credentials.ssid)
         var q = base()
         q[kSecAttrAccount as String] = camera.credentials.ssid
-        q[kSecAttrLabel as String] = "OM Transfer：\(camera.name)"
+        q[kSecAttrLabel as String] = "OM Drop：\(camera.name)"
         q[kSecAttrSynchronizable as String] = true
         q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         q[kSecValueData as String] = try JSONEncoder().encode(camera)

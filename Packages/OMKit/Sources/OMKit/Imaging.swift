@@ -57,7 +57,7 @@ public actor ImageStore {
 
     public static func defaultDirectory() -> URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("OM Transfer/images", isDirectory: true)
+            .appendingPathComponent("OM Drop/images", isDirectory: true)
     }
 
     /// Cached image if already in memory (no waiting).

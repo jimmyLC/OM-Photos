@@ -20,7 +20,7 @@ struct QRScannerView: View {
             default:
                 ContentUnavailableView("無法使用鏡頭",
                                        systemImage: "camera.badge.ellipsis",
-                                       description: Text("請到 系統設定 › 隱私權與安全性 › 相機 允許 OM Transfer，或改用「從照片讀取」與手動輸入。"))
+                                       description: Text("請到 系統設定 › 隱私權與安全性 › 相機 允許 OM Drop，或改用「從照片讀取」與手動輸入。"))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

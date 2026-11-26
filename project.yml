@@ -1,4 +1,4 @@
-name: OMTransfer
+name: OMDrop
 options:
   developmentLanguage: zh-Hant
   deploymentTarget:
@@ -12,18 +12,20 @@ settings:
     SWIFT_VERSION: '6.0'
     DEVELOPMENT_TEAM: 429PZ9Y4P4
     CODE_SIGN_STYLE: Automatic
-    PRODUCT_BUNDLE_IDENTIFIER: com.jimmylc.OMTransfer
-    PRODUCT_NAME: OM Transfer
+    PRODUCT_BUNDLE_IDENTIFIER: com.jimmylc.OMDrop
+    PRODUCT_NAME: OM Drop
     MARKETING_VERSION: 0.1.0
     CURRENT_PROJECT_VERSION: 1
     GENERATE_INFOPLIST_FILE: YES
-    INFOPLIST_KEY_CFBundleDisplayName: OM Transfer
+    INFOPLIST_KEY_CFBundleDisplayName: OM Drop
     INFOPLIST_KEY_NSCameraUsageDescription: 用鏡頭掃描相機螢幕上的 QR code，完成配對。
     INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 把從相機匯入的照片和影片加入照片圖庫。
     INFOPLIST_KEY_NSHumanReadableCopyright: 'Copyright © 2026 JimmyLC'
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
 targets:
-  OMTransfer-macOS:
+  OMDrop-macOS:
     type: application
     platform: macOS
     sources:
@@ -33,18 +35,18 @@ targets:
       - package: OMKit
     settings:
       base:
-        CODE_SIGN_ENTITLEMENTS: App/macOS/OMTransfer.entitlements
+        CODE_SIGN_ENTITLEMENTS: App/macOS/OMDrop.entitlements
         ENABLE_APP_SANDBOX: NO
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.photography
         INFOPLIST_KEY_NSLocationUsageDescription: macOS 需要定位權限才能讀取 Wi-Fi 名稱，用來切換到相機 Wi-Fi 並切回原本的網路。不會記錄你的位置。
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: macOS 需要定位權限才能讀取 Wi-Fi 名稱，用來切換到相機 Wi-Fi 並切回原本的網路。不會記錄你的位置。
     entitlements:
-      path: App/macOS/OMTransfer.entitlements
+      path: App/macOS/OMDrop.entitlements
       properties:
         keychain-access-groups:
-          - $(AppIdentifierPrefix)com.jimmylc.OMTransfer
+          - $(AppIdentifierPrefix)com.jimmylc.OMDrop
 
-  OMTransfer-iOS:
+  OMDrop-iOS:
     type: application
     platform: iOS
     sources:
@@ -55,7 +57,7 @@ targets:
     settings:
       base:
         TARGETED_DEVICE_FAMILY: '1,2'
-        CODE_SIGN_ENTITLEMENTS: App/iOS/OMTransfer.entitlements
+        CODE_SIGN_ENTITLEMENTS: App/iOS/OMDrop.entitlements
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
@@ -69,7 +71,7 @@ targets:
     # add `com.apple.developer.networking.HotspotConfiguration: true` below and
     # SWIFT_ACTIVE_COMPILATION_CONDITIONS: HOTSPOT to the settings.
     entitlements:
-      path: App/iOS/OMTransfer.entitlements
+      path: App/iOS/OMDrop.entitlements
       properties:
         keychain-access-groups:
-          - $(AppIdentifierPrefix)com.jimmylc.OMTransfer
+          - $(AppIdentifierPrefix)com.jimmylc.OMDrop

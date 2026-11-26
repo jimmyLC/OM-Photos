@@ -1,4 +1,4 @@
-# OM Transfer 規格書（第二版）
+# OM Drop 規格書（第二版）
 
 狀態：**待確認** · 2026-11-26
 
@@ -117,7 +117,7 @@ App（SwiftUI，一份程式碼，兩個 target）
 └─ iOS（iPhone + iPad）
 ```
 
-- XcodeGen 產生專案，Bundle ID `com.jimmylc.OMTransfer`。
+- XcodeGen 產生專案，Bundle ID `com.jimmylc.OMDrop`。
 - Mac 不開沙盒；iOS 必要權限：本地網路、相機（掃 QR）、照片新增、Hotspot Configuration、連線設定允許本地 http。
 - 自動測試用模擬相機（沿用 Python 探測時的做法改成 Swift）。
 - 協定依據：`om-camera-research/PLAN.md`。

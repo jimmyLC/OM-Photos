@@ -39,7 +39,7 @@ struct LibraryContent: View {
                 Text(message)
             } actions: {
                 Button("再試一次") { Task { await library.reload() } }
-                    .buttonStyle(.glassProminent)
+                    .brandProminent()
             }
         case .loaded:
             if library.items.isEmpty {
@@ -308,7 +308,7 @@ struct SummaryBar: View {
                             } label: {
                                 Label("匯入所有新項目（\(model.newItemCount)）", systemImage: "square.and.arrow.down")
                             }
-                            .buttonStyle(.glassProminent)
+                            .brandProminent()
                         } else if !library.items.isEmpty {
                             Label("全部已匯入", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                         }
@@ -328,7 +328,7 @@ struct SummaryBar: View {
                         } label: {
                             Label("匯入", systemImage: "square.and.arrow.down")
                         }
-                        .buttonStyle(.glassProminent)
+                        .brandProminent()
                     }
                 }
                 .padding(.leading, 16)
@@ -399,7 +399,7 @@ struct ImportResultView: View {
             }
             if !model.importer.failedItems.isEmpty {
                 Button("重試") { model.retryFailed() }
-                    .buttonStyle(.glassProminent)
+                    .brandProminent()
             }
             Button {
                 model.importer.dismissSummary()

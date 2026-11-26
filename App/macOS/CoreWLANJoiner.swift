@@ -15,7 +15,7 @@ final class CoreWLANJoiner: WiFiJoining, @unchecked Sendable {
 
     func join(_ credentials: CameraCredentials) async throws {
         guard await location.ensureAuthorized() else {
-            throw JoinError("macOS 需要「定位服務」權限才能切換 Wi-Fi。請到 系統設定 › 隱私權與安全性 › 定位服務，允許 OM Transfer。")
+            throw JoinError("macOS 需要「定位服務」權限才能切換 Wi-Fi。請到 系統設定 › 隱私權與安全性 › 定位服務，允許 OM Drop。")
         }
         guard let wifi = interface else { throw JoinError("這台 Mac 沒有 Wi-Fi。") }
         guard wifi.powerOn() else { throw JoinError("Wi-Fi 已關閉，請先開啟。") }
