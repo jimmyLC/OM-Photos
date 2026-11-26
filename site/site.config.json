@@ -1,0 +1,15 @@
+{
+  "domain": "om-photos.app",
+  "name": "OM Photos",
+  "repo": "https://github.com/jimmyLC/OM-Photos",
+  "contactEmail": "contact@jimmy-tools.com",
+  "ga4MeasurementId": "",
+  "gscVerification": "",
+  "mac": {
+    "version": "0.1.0",
+    "size": "3 MB",
+    "requires": "macOS 27",
+    "url": "/download/mac",
+    "releases": "https://github.com/jimmyLC/OM-Photos/releases"
+  }
+}

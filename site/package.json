@@ -1,0 +1,13 @@
+{
+  "name": "om-photos-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/build.mjs && node scripts/check.mjs",
+    "dev": "node scripts/build.mjs && npx wrangler dev --port 8791",
+    "deploy": "node scripts/build.mjs && node scripts/check.mjs && wrangler deploy"
+  },
+  "dependencies": { "marked": "^18.1.1" },
+  "devDependencies": { "wrangler": "^4.168.0" }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "om-photos-site",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-01",
+  "account_id": "d4783f0367eb11b6cde514f3ff9b725e",
+  "routes": [
+    { "pattern": "om-photos.app", "custom_domain": true },
+    { "pattern": "www.om-photos.app", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}
